@@ -580,6 +580,11 @@ function prep(id) {
   }
   (q.dots || []).forEach(([a, b]) => addPair(a, b, (x, y) => Math.abs(x - y) === 1, { t: 'dot' }));
   (q.whisper || []).forEach(L => L.slice(1).forEach((b, k) => addPair(L[k], b, (x, y) => Math.abs(x - y) >= 5, { t: 'whisper' })));
+  const wnb = [...Array(C)].map(() => []), wcol = [];
+  (q.whisper || []).forEach(L => L.slice(1).forEach((b, k) => { if (!wnb[L[k]].includes(b)) { wnb[L[k]].push(b); wnb[b].push(L[k]); } }));
+  let ncomp = 0;
+  for (let i = 0; i < C; i++) if (wnb[i].length && !wcol[i]) { const st = [i]; wcol[i] = { comp: ncomp, c: 0 };
+    while (st.length) { const a = st.pop(); wnb[a].forEach(b => { if (!wcol[b]) { wcol[b] = { comp: ncomp, c: 1 - wcol[a].c }; st.push(b); } }); } ncomp++; }
   const fort = new Set(q.fortress || []);
   fort.forEach(i => {
     const r = Math.floor(i / N), c = i % N;
@@ -592,7 +597,7 @@ function prep(id) {
   const cellCages = [...Array(C)].map(() => []);
   cages.forEach((cg, k) => cg.cells.forEach(i => cellCages[i].push(k)));
   const P = { id, q, N, C, boxes, groups, peers, hlPeers, odd, even, pc, cages, cellCages, fort,
-    givens: [...q.p].map(Number), sol: [...q.s].map(Number), type: TYPES[q.k] };
+    wnb, wcol, givens: [...q.p].map(Number), sol: [...q.s].map(Number), type: TYPES[q.k] };
   PREP[id] = P;
   return P;
 }
@@ -1162,6 +1167,48 @@ function hintStep(P, g) {
     }
     return ch;
   };
+  const unitOf = (a, b) => G.find(gr => gr.t !== 'diag' && gr.cells.includes(a) && gr.cells.includes(b));
+  const tWhisper2 = () => {   // 绿线：两个邻居在同一行/列/宫，配不出两个不同的数
+    if (!P.q.whisper) return false;
+    let ch = false;
+    for (let i = 0; i < C; i++) if (!g[i] && P.wnb[i].length > 1) {
+      const nb = P.wnb[i];
+      for (let a = 0; a < nb.length; a++) for (let b = a + 1; b < nb.length; b++) {
+        const j = nb[a], k = nb[b]; if (!sees(j, k)) continue;
+        for (const d of [...cand[i]]) {
+          const vj = (g[j] ? [g[j]] : [...cand[j]]).filter(x => Math.abs(x - d) >= 5), vk = (g[k] ? [g[k]] : [...cand[k]]).filter(x => Math.abs(x - d) >= 5);
+          if (!vj.length || !vk.length || vj.some(x => vk.some(y => y !== x))) continue;
+          const u = [...new Set(vj.concat(vk))], gr = unitOf(j, k);
+          ch = elim(i, d, `它在绿线上的两个邻居${W_(j)}和${W_(k)}在同${gr ? gr.name.replace(/第 \d+ /, '一') : '一个区域'}，填 ${d} 的话这两格都只能填 ${list(u)}，必然重复`, '绿线两邻居', V(R([j, k], 'rule'), [[i, j, 'rule'], [i, k, 'rule']], [j, k], { k: 'w2', cells: [j, k], j, k2: k, u, un: gr ? gr.name.replace(/第 \d+ /, '一') : '一个区域' })) || ch;
+        }
+      }
+    }
+    return ch;
+  };
+  const tWhisperSide = () => {   // 绿线高低交替：某区域的某个数只能落在同一组格子里，这组格子就定了高低
+    if (!P.q.whisper) return false;
+    let ch = false;
+    for (const gr of [...G.filter(x => x.t === 'box'), ...G.filter(x => x.t !== 'box')]) for (let d = 1; d <= N; d++) {
+      if (d === 5 || placed(gr, d)) continue;
+      const pos = posOf(gr, d); if (pos.length < 1 || !pos.every(x => P.wcol[x])) continue;
+      const { comp, c } = P.wcol[pos[0]]; if (!pos.every(x => P.wcol[x].comp === comp && P.wcol[x].c === c)) continue;
+      const low = d < 5, side = low ? '低数（1~4）' : '高数（6~9）', other = low ? '高数（6~9）' : '低数（1~4）';
+      const same = [], opp = [], oth = new Map();
+      gr.cells.forEach(c => { if (g[c] || pos.includes(c)) return;
+        const w = why[c].get(d), pj = [...P.peers[c]].find(j => g[j] === d), u = pj != null && unitOf(c, pj);
+        const lab = w ? (TECH_SHORT(w.tech, d) || w.tech) : u ? `同${u.name.replace(/第 \d+ /, '一')}已有 ${d}` : '和旁边的提示配不上';
+        oth.set(lab, [...(oth.get(lab) || []), c]); });
+      const others = [...oth.entries()];
+      for (let i = 0; i < C; i++) if (P.wcol[i] && P.wcol[i].comp === comp) (P.wcol[i].c === c ? same : opp).push(i);
+      const head = `绿线上的数一高一低交替（1~4 是低数，6~9 是高数）。${gr.name}的 ${d} 只能放在绿线上的${WL(pos)}，`;
+      for (const i of same) if (!g[i]) for (const x of [...cand[i]]) if (x !== 5 && (x < 5) !== low)
+        ch = elim(i, x, head + `${pos.length > 1 ? '这几格' : '这一格'}和${W_(i)}在线上隔着偶数步、高低相同，所以${W_(i)}也是${side}，不能填 ${x}`, '绿线高低交替', V(R(pos, 'rule'), [], pos, { k: 'wside', cells: pos, gc: gr.cells, gname: gr.name, d, low, rel: 'same', others })) || ch;
+      for (const i of opp) if (!g[i]) for (const x of [...cand[i]]) if (x !== 5 && (x < 5) === low)
+        ch = elim(i, x, head + `${pos.length > 1 ? '这几格' : '这一格'}是${side}；${W_(i)}和它们在线上隔着奇数步、高低相反，是${other}，不能填 ${x}`, '绿线高低交替', V(R(pos, 'rule'), [], pos, { k: 'wside', cells: pos, gc: gr.cells, gname: gr.name, d, low, rel: 'opp', others })) || ch;
+      if (ch) return true;
+    }
+    return ch;
+  };
   const tCage = () => {   // 杀手框的数字组合
     let ch = false;
     for (const cg of P.cages) {
@@ -1424,7 +1471,7 @@ function hintStep(P, g) {
     return false;
   };
   const TECHS = [
-    [tPair, 'd'], [tCage, 'd'], [tRegionSum, 'd'], [tOccupy, 'd'], [tLocked, 'd'], [hiddenSub(2, '数对占位'), 'd'],
+    [tPair, 'd'], [tWhisper2, 'd'], [tCage, 'd'], [tRegionSum, 'd'], [tOccupy, 'd'], [tLocked, 'd'], [tWhisperSide, 'd'], [hiddenSub(2, '数对占位'), 'd'],
     [nakedSub(2, '显性数对'), 'c'], [hiddenSub(3, '隐性三数组'), 'c'], [nakedSub(3, '显性三数组'), 'c'],
     [fish(2), 'c'], [tXY, 'c'], [tXYZ, 'c'], [tTurbot, 'c'], [tW, 'c'], [fish(3), 'c'],
     [nakedSub(4, '显性四数组'), 'c'], [hiddenSub(4, '隐性四数组'), 'c'], [fish(4), 'c'], [tXChain, 'c'], [tXYChain, 'c']
@@ -1508,7 +1555,7 @@ function hintTexts(P, g, st) {
   return { L1, L2, L3, focus, reasons, techLine };
 }
 /* ---------- 第三步：分步图解（给初学者看的“连环画”） ---------- */
-function TECH_SHORT(t, v) { return ({ '乘积提示': '乘积配不上', '加法提示': '和配不上', '连续线': '连续线条件不符', '连续线（没有线的地方不能相差 1）': '没有连续线，不能相差 1', '不等号': '不等号不符', '克隆格': '克隆格不符', '堡垒大小关系': '堡垒大小不符', '白点': '白点要求相差 1，配不上', '绿线（德语耳语线）': '绿线要求至少差 5，配不上', '区块摒除': `被区块挡住`, '数对占位': '被数对占住' })[t] || ''; }
+function TECH_SHORT(t, v) { return ({ '乘积提示': '乘积配不上', '加法提示': '和配不上', '连续线': '连续线条件不符', '连续线（没有线的地方不能相差 1）': '没有连续线，不能相差 1', '不等号': '不等号不符', '克隆格': '克隆格不符', '堡垒大小关系': '堡垒大小不符', '白点': '白点要求相差 1，配不上', '绿线两邻居': '绿线两个邻居会重复', '绿线高低交替': '绿线高低不符', '绿线（德语耳语线）': '绿线要求至少差 5，配不上', '区块摒除': `被区块挡住`, '数对占位': '被数对占住' })[t] || ''; }
 function relWord(P, a, b) {
   const G = groupInfo(P);
   const gr = G.find(x => x.cells.includes(a) && x.cells.includes(b));
@@ -1539,6 +1586,15 @@ function buildFrames(P, g, st, tx) {
     const end = (t, extra = {}) => { if (isCell) addCross(x); else addStrike(x, v); push(Object.assign({ text: t }, extra), true); };
     const L0 = lead ? lead + '' : '';
     if (!I) { end(L0 + plain(text) + '。', { tint: viz ? T(Object.keys(viz.roles || {}).map(Number), 'c') : {} }); return; }
+    if (I.k === 'w2') { end(`${L0}${W(x)} 在绿线上的两个邻居 ${W(I.j)}、${W(I.k2)} 在同${I.un}。${W(x)} 如果填 ${v}，这两个邻居都只能填 ${list(I.u)}，必然重复，所以 ${W(x)} 不能填 ${v}。`, { tint: Object.assign(T(I.cells, 'c'), T([x], 'focus')), lines: [[x, I.j, 'ray'], [x, I.k2, 'ray']] }); return; }
+    if (I.k === 'wside') {
+      const sd = I.low ? '低数（1~4）' : '高数（6~9）', od = I.low ? '高数（6~9）' : '低数（1~4）', ps = I.cells.map(W).join('、'), many = I.cells.length > 1;
+      push({ text: `${L0}绿线上相邻两格至少差 5，所以线上的数一定是“低数 1~4”和“高数 6~9”交替出现（5 不能上线）。看${name(I.gname)}的 ${I.d}：${I.others.map(([lab, cs]) => `${cs.map(W).join('')} ${lab}`).join('；')}${I.others.length ? '，' : ''}只能放在绿线上的 ${ps}${many ? '，这几格沿着线数过去隔的是偶数步，高低相同' : ''}。所以${many ? '它们' : '这一格'}都是${sd}。`, tint: Object.assign(T(I.gc, 'focus'), T(I.cells, 'c')) });
+      if (I.rel === 'same' && I.cells.includes(x)) end(`${W(x)} 就在其中，是${sd}，不能填 ${v}。`, { tint: Object.assign(T(I.cells, 'c'), T([x], 'focus')) });
+      else if (I.rel === 'same') end(`${W(x)} 和${many ? '它们' : '它'}沿线隔偶数步，也是${sd}，不能填 ${v}。`, { tint: Object.assign(T(I.cells, 'c'), T([x], 'focus')) });
+      else end(`${W(x)} 和${many ? '它们' : '它'}沿线隔奇数步，是${od}，不能填 ${v}。`, { tint: Object.assign(T(I.cells, 'c'), T([x], 'focus')) });
+      return;
+    }
     if (I.k === 'locked') {
       end(`${L0}看${name(I.from)}：${I.d} 只能放在标蓝的几格里，它们都在${name(I.to)}上。所以${I.to}的 ${I.d} 一定在这几格之一，${W(x)} 不能放 ${I.d}。`, { tint: Object.assign(T(I.toCells, 'focus'), T(I.fromCells, 'focus'), T(I.pos, 'c')) });
     } else if (I.k === 'hsub') {
@@ -1589,6 +1645,7 @@ function buildFrames(P, g, st, tx) {
     else push(Object.assign({ text }, extra));
   };
   const R = tx.reasons || [];
+  const leadOf = (r, k) => k ? '再找一处：' : CAND_TECHS.has(r.tech) ? '直观法到这里推不动了，要写出候选数找规律。' : '';
   const blockOf = r => r.viz && !r.viz.info && r.viz.links && r.viz.links[0] && r.viz.links[0][2] !== 'rule' && Object.entries(r.viz.roles || {}).find(([, role]) => role === 'block');
   if (st.hard || st.guess) {
     push({ text: `看 ${W(i)}：它现在可以填 ${list([...st.cand[i]])}。` + R.map(r => `<br>${plain((st.why[i].get(r.v) || {}).text) || `${r.v} 推下去会出矛盾`}。`).join(''), tint: T([i], 'focus'), cands: { [i]: [...st.cand[i]] } });
@@ -1610,7 +1667,7 @@ function buildFrames(P, g, st, tx) {
     if (!hard.length) { simple.forEach(r => addCross(r.x)); push(Object.assign({ text: t + `，只剩 ${W(i)} 能放 ${d}。` }, extra, { ghost: { [i]: d } })); }
     else {
       // 按“发现的顺序”讲：先找到技巧的形状、删掉候选，再回头用直观法捡到这个数
-      hard.forEach((r, k) => techFrames(r.x, d, r.viz, r.text, true, k ? '再找一处：' : '直观法到这里推不动了，要写出候选数找规律。'));
+      hard.forEach((r, k) => techFrames(r.x, d, r.viz, r.text, true, leadOf(r, k)));
       simple.forEach(r => addCross(r.x));
       push(Object.assign({}, extra, { text: `刚才划掉了 ${hard.map(r => W(r.x)).join('、')} 的 ${d}。现在再看${name(gr.name)}：${parts.length ? parts.join('；') + '，' : ''}只剩 ${W(i)} 能放 ${d}。`, ghost: { [i]: d } }));
     }
@@ -1625,7 +1682,7 @@ function buildFrames(P, g, st, tx) {
     const extra = { tint: T([i], 'focus'), circle: circ, lines, cands: { [i]: all } };
     if (!hard.length) { simple.forEach(r => addStrike(i, r.v)); push(Object.assign({ text: t + `，只剩 ${d} 能填。` }, extra, { ghost: {} })); }
     else {
-      hard.forEach((r, k) => techFrames(i, r.v, r.viz, r.text, false, k ? '再找一处：' : '直观法到这里推不动了，要写出候选数找规律。'));
+      hard.forEach((r, k) => techFrames(i, r.v, r.viz, r.text, false, leadOf(r, k)));
       simple.forEach(r => addStrike(i, r.v));
       push(Object.assign({}, extra, { text: `刚才排除了 ${list(hard.map(r => r.v))}。现在再看 ${t}，只剩 ${d} 能填。` }));
     }
