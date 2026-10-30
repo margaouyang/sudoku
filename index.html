@@ -281,6 +281,7 @@
   .ph-cell.bb { border-bottom: 2.5px solid var(--grid-thick); } .ph-cell.br { border-right: 2.5px solid var(--grid-thick); }
   .ph-cell.given { color: var(--given); font-weight: 700; } .ph-cell.hand { color: var(--case1); }
   .ph-cell.bad { box-shadow: inset 0 0 0 3px var(--red); }
+  .ph-cell.guess { box-shadow: inset 0 0 0 2px #e0a23a; }
   .ph-cell.sel { background: var(--cell-hint); }
   .ph-tools { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; } .ph-tools .btn { padding: 4px 11px; }
   .ph-legend { font-size: .82em; color: var(--ink-3); margin: 8px 0 0; } .lg-g { color: var(--given); } .lg-h { color: var(--case1); }
@@ -2121,29 +2122,42 @@ async function phNext() {
 function phCheck() {
   const R = PH.cur, N = R.N, giv = R.cells.map(c => c.t === 'given' ? c.d : 0), s = solveStd(N, giv);
   R.sol = s.n === 1 ? s.sol : null; R.nsol = s.n;
+  R.cells.forEach(c => { if (c.t === 'hand' && c.d0 === undefined) c.d0 = c.d; });
+  // 和同行/同列/同宫里的题目数字或已认对的手写数撞了 → 多半是没认清，不像是写错
+  const bs = Math.sqrt(N) | 0, peers = i => { const r = Math.floor(i / N), c = i % N, out = [];
+    for (let j = 0; j < N * N; j++) { if (j === i) continue; const r2 = Math.floor(j / N), cc = j % N;
+      if (r2 === r || cc === c || (Math.floor(r2 / bs) === Math.floor(r / bs) && Math.floor(cc / bs) === Math.floor(c / bs))) out.push(j); }
+    return out; };
+  const clash = (i, d) => peers(i).some(j => { const o = R.cells[j]; return o.t === 'given' ? o.d === d : o.t === 'hand' && o.d0 === d && R.sol[j] === d; });
   R.cells.forEach((c, i) => {
-    c.bad = false;
+    c.bad = false; c.guess = false;
     if (c.t !== 'hand' || !R.sol) return;
-    if (c.d !== R.sol[i] && c.p && !c.edited && c.p[R.sol[i]] >= .05) c.d = R.sol[i];   // 程序没把握时，按正确答案的读法理解
+    if (c.p && !c.edited) {
+      const t = R.sol[i], pt = c.p[t] || 0;
+      // 程序没把握时，按正确答案的读法理解；读出来的数和题目冲突时，只要有一点像就按答案理解
+      if (c.d0 !== t && (pt >= .05 || (clash(i, c.d0) && pt >= 1e-5))) { c.d = t; c.guess = true; }
+      else c.d = c.d0;
+    }
     c.bad = c.d !== R.sol[i];
   });
 }
 function phRender() {
   const R = PH.cur, N = R.N; phCheck();
-  const ng = R.cells.filter(c => c.t === 'given').length, hands = R.cells.filter(c => c.t === 'hand'), nb = hands.filter(c => c.bad).length;
+  const ng = R.cells.filter(c => c.t === 'given').length, hands = R.cells.filter(c => c.t === 'hand'), nb = hands.filter(c => c.bad).length, ngs = hands.filter(c => c.guess).length;
   const st = R.nsol === 1 ? `<span class="ok">题目 ${ng} 个数，有唯一解 ✓</span>` : R.nsol === 0 ? `<span class="warn">题目 ${ng} 个数，但无解。请对照照片检查黑色的题目数字。</span>` : `<span class="warn">题目 ${ng} 个数，解不唯一，可能漏认了题目数字。请对照照片补上。</span>`;
   const hs = !hands.length ? '没有手写的数。' : !R.sol ? `你填了 ${hands.length} 个数。` : nb ? `你填了 ${hands.length} 个数，其中 <b class="warn">${nb} 个和正确答案不同</b>（红框）。可能是写错了，也可能是我没认清，请对照照片看一下：认错了就改过来，确实写错就留着。` : `你填了 ${hands.length} 个数，<span class="ok">都对 ✓</span>`;
+  const gs = ngs ? `<br>有 ${ngs} 个字我没认清，已按正确答案理解（橙框）。如果你其实写的不是这个数，点格子改过来。` : '';
   let grid = '';
   R.cells.forEach((c, i) => {
     const r = Math.floor(i / N), col = i % N, bR = (r % 3 === 2 && r < N - 1) ? ' bb' : '', bC = (col % 3 === 2 && col < N - 1) ? ' br' : '';
-    grid += `<button type="button" class="ph-cell ${c.t}${c.bad ? ' bad' : ''}${PH.sel === i ? ' sel' : ''}${bR}${bC}" data-ph="${i}">${c.t === 'given' || c.t === 'hand' ? c.d : c.t === 'note' ? '·' : ''}</button>`;
+    grid += `<button type="button" class="ph-cell ${c.t}${c.bad ? ' bad' : c.guess ? ' guess' : ''}${PH.sel === i ? ' sel' : ''}${bR}${bC}" data-ph="${i}">${c.t === 'given' || c.t === 'hand' ? c.d : c.t === 'note' ? '·' : ''}</button>`;
   });
   $('ph-body').innerHTML = `<div class="ph-wrap"><canvas id="ph-cv" width="${R.S}" height="${R.S}"></canvas>
       <div><div class="ph-grid" style="grid-template-columns:repeat(${N},1fr)">${grid}</div>
       <div class="ph-tools">${[...Array(N)].map((_, k) => `<button type="button" class="btn" data-phd="${k + 1}">${k + 1}</button>`).join('')}<button type="button" class="btn" data-phd="0">清空</button></div>
       <div class="ph-tools"><button type="button" class="btn" data-pht="given">设为题目数字</button><button type="button" class="btn" data-pht="hand">设为我填的</button></div>
       <p class="ph-legend"><b class="lg-g">黑色</b>＝印刷的题目　<b class="lg-h">蓝色</b>＝你手写的　·＝跳过的小字或擦痕。点格子再点数字可以改。</p></div></div>
-    <p class="ph-st">${st}<br>${hs}</p>
+    <p class="ph-st">${st}<br>${hs}${gs}</p>
     <div class="ph-foot"><button type="button" class="btn" id="ph-skip">${PH.queue.length ? '跳过这张' : '取消'}</button><button type="button" class="btn solid" id="ph-ok" ${R.nsol === 1 ? '' : 'disabled'}>导入并开始做</button></div>`;
   const cv = $('ph-cv'), cx = cv.getContext('2d'), im = cx.createImageData(R.S, R.S);
   for (let i = 0; i < R.S * R.S; i++) { im.data[i * 4] = R.rgb[i * 3]; im.data[i * 4 + 1] = R.rgb[i * 3 + 1]; im.data[i * 4 + 2] = R.rgb[i * 3 + 2]; im.data[i * 4 + 3] = 255; }
