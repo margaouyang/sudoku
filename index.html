@@ -1548,7 +1548,6 @@ function buildFrames(P, g, st, tx) {
     const simple = R.filter(r => !(r.viz && r.viz.info)), hard = R.filter(r => r.viz && r.viz.info);
     const blocks = new Map(), others = [];
     simple.forEach(r => { const b = blockOf(r); if (b) { const j = +b[0]; blocks.set(j, [...(blocks.get(j) || []), r.x]); } else others.push(r); });
-    simple.forEach(r => addCross(r.x));
     const SHORT = v => ({ '虚线框': `放 ${v} 后虚线框的和对不上`, '杀手框的数字组合': `所在虚线框的组合里没有 ${v}`, '区域求和': `按区域总和推算，用不到 ${v}`, '提示': `和旁边的提示配不上`, '奇偶': `奇偶不符`, '提示数占位': `${v} 已被提示占住` });
     const shortOf = (r, v) => SHORT(v)[r.tech] || TECH_SHORT(r.tech, v) || plain(r.text);
     const parts = [];
@@ -1557,27 +1556,27 @@ function buildFrames(P, g, st, tx) {
     byS.forEach((xs, k) => parts.push(`${xs.map(W).join('')} ${k}`));
     let t = `${name(gr.name)}里：${parts.join('；')}`;
     const extra = { tint: focus, circle: [...blocks.keys()], lines: [...blocks.entries()].flatMap(([j, xs]) => xs.map(x => [j, x, 'ray'])) };
-    if (!hard.length) { push(Object.assign({ text: t + `，只剩 ${W(i)} 能放 ${d}。` }, extra, { ghost: { [i]: d } })); }
+    if (!hard.length) { simple.forEach(r => addCross(r.x)); push(Object.assign({ text: t + `，只剩 ${W(i)} 能放 ${d}。` }, extra, { ghost: { [i]: d } })); }
     else {
-      if (simple.length) push(Object.assign({ text: t + `，还剩 ${hard.map(r => W(r.x)).join('、')} 要多想一步。` }, extra));
-      hard.forEach((r, k) => techFrames(r.x, d, r.viz, r.text, true, simple.length || k ? `为什么 ${W(r.x)} 不能放 ${d}？` : `在${name(gr.name)}里找 ${d}。先看 ${W(r.x)}：`));
-      finish(`于是${name(gr.name)}里只剩 ${W(i)} 能放 ${d}。`, { ghost: { [i]: d } });
+      // 按“发现的顺序”讲：先找到技巧的形状、删掉候选，再回头用直观法捡到这个数
+      hard.forEach((r, k) => techFrames(r.x, d, r.viz, r.text, true, k ? '再找一处：' : '直观法到这里推不动了，要写出候选数找规律。'));
+      simple.forEach(r => addCross(r.x));
+      push(Object.assign({}, extra, { text: `刚才划掉了 ${hard.map(r => W(r.x)).join('、')} 的 ${d}。现在再看${name(gr.name)}：${parts.length ? parts.join('；') + '，' : ''}只剩 ${W(i)} 能放 ${d}。`, ghost: { [i]: d } }));
     }
   } else {
     const all = []; for (let v = 1; v <= N; v++) all.push(v);
     const simple = R.filter(r => !(r.viz && r.viz.info)), hard = R.filter(r => r.viz && r.viz.info);
     const circ = [], lines = []; let rules = '';
     const byT = new Map();
-    simple.forEach(r => { addStrike(i, r.v); const b = blockOf(r); if (b) { circ.push(+b[0]); lines.push([+b[0], i, 'ray']); } else byT.set(r.tech || plain(r.text), [...(byT.get(r.tech || plain(r.text)) || []), r.v]); });
+    simple.forEach(r => { const b = blockOf(r); if (b) { circ.push(+b[0]); lines.push([+b[0], i, 'ray']); } else byT.set(r.tech || plain(r.text), [...(byT.get(r.tech || plain(r.text)) || []), r.v]); });
     byT.forEach((vs, k) => { rules += `；${list(vs)} ${({ '虚线框': '会让虚线框的和对不上', '杀手框的数字组合': '不在虚线框的组合里', '区域求和': '按区域总和推算用不上', '提示': '和旁边的提示配不上', '奇偶': '奇偶不符', '提示数占位': '已被提示占住' })[k] || k}`; });
-    const left = all.filter(v => !(acc.strike[i] || []).includes(v));
     let t = (circ.length ? `${W(i)} 同行、同列、同宫里已有圈出的这些数` : `${W(i)}：`) + rules.replace(/^；/, circ.length ? '；' : '');
     const extra = { tint: T([i], 'focus'), circle: circ, lines, cands: { [i]: all } };
-    if (!hard.length) push(Object.assign({ text: t + `，只剩 ${d} 能填。` }, extra, { ghost: {} }));
+    if (!hard.length) { simple.forEach(r => addStrike(i, r.v)); push(Object.assign({ text: t + `，只剩 ${d} 能填。` }, extra, { ghost: {} })); }
     else {
-      push(Object.assign({ text: t + `，还剩 ${list(left)}。` }, extra));
-      hard.forEach(r => techFrames(i, r.v, r.viz, r.text, false, `为什么不能是 ${r.v}？`));
-      finish(`所以 ${W(i)} 只能填 ${d}。`, { ghost: {} });
+      hard.forEach((r, k) => techFrames(i, r.v, r.viz, r.text, false, k ? '再找一处：' : '直观法到这里推不动了，要写出候选数找规律。'));
+      simple.forEach(r => addStrike(i, r.v));
+      push(Object.assign({}, extra, { text: `刚才排除了 ${list(hard.map(r => r.v))}。现在再看 ${t}，只剩 ${d} 能填。` }));
     }
   }
   // 把提到的格子换成字母标签（A、B、C…），整套讲解里同一格始终用同一个字母
