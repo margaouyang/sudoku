@@ -209,6 +209,10 @@
   @keyframes hintIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
   @media (prefers-reduced-motion: reduce) { #board .hint-cell, .hint-box { animation: none; } }
   .hint-tag { display: inline-block; margin-right: 8px; padding: 0 7px; border-radius: 3px; background: var(--hint); color: #fff; font-size: .82em; font-weight: 700; }
+  #flash { position: fixed; left: 50%; z-index: 60; max-width: min(92vw, 520px); padding: 10px 16px; border-radius: 12px; background: var(--ink); color: var(--sheet); font-size: .95em; line-height: 1.45; box-shadow: 0 6px 24px rgba(0,0,0,.25); opacity: 0; pointer-events: none; transform: translate(-50%, 8px); transition: opacity .2s, transform .2s; }
+  #flash.on { opacity: .96; pointer-events: auto; transform: translate(-50%, 0); }
+  #flash.warn { background: var(--red); color: #fff; }
+  #flash.success { background: #2f7d4f; color: #fff; }
   #toast ul { margin: 6px 0 4px; padding-left: 1.3em; }
   #toast li { margin: 2px 0; }
   #board text { font-family: var(--num); }
@@ -665,9 +669,23 @@ function load() {
 const $ = id => document.getElementById(id);
 function fmt(sec) { sec = Math.max(0, Math.floor(sec || 0)); return String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0'); }
 function srcText(q) { return '出处：' + q.src.map(([g, n]) => typeof n === 'string' ? (n.endsWith('题') ? `${GROUPS[g]}，${n}` : `${GROUPS[g]}，${n}${TYPES[q.k].name}例题`) : `${GROUPS[g]}，${TYPES[q.k].name}第 ${n} 题`).join('；'); }
-function toast(msg, type = 'info') { const t = $('toast'); t.textContent = msg; t.className = 'margin-note ' + type; t.hidden = false; }
-function toastHTML(html, type = 'info') { const t = $('toast'); t.innerHTML = html; t.className = 'margin-note ' + type; t.hidden = false; }
-function hideToast() { $('toast').hidden = true; }
+function toast(msg, type = 'info') { const t = $('toast'); t.textContent = msg; t.className = 'margin-note ' + type; t.hidden = false; flashIfHidden(t, type); }
+function toastHTML(html, type = 'info') { const t = $('toast'); t.innerHTML = html; t.className = 'margin-note ' + type; t.hidden = false; flashIfHidden(t, type); }
+// 消息框不在屏幕里时（手机上常被滑到上面），在工具栏上方弹一个小气泡，几秒后自动消失
+let flashTimer = 0;
+function flashIfHidden(t, type) {
+  requestAnimationFrame(() => {
+    const r = t.getBoundingClientRect(), tools = document.querySelector('.tools');
+    const tr = tools ? tools.getBoundingClientRect() : null, bottomEdge = tr && tr.top > innerHeight * .4 ? tr.top : innerHeight;
+    if (r.top >= 60 && r.bottom <= bottomEdge) return;   // 本来就看得见
+    let f = $('flash'); if (!f) { f = document.createElement('div'); f.id = 'flash'; f.onclick = () => f.classList.remove('on'); document.body.appendChild(f); }
+    f.textContent = t.textContent.trim(); f.className = type;
+    f.style.bottom = (innerHeight - bottomEdge + 12) + 'px';
+    void f.offsetWidth; f.classList.add('on');
+    clearTimeout(flashTimer); flashTimer = setTimeout(() => f.classList.remove('on'), Math.min(7000, 2500 + f.textContent.length * 60));
+  });
+}
+function hideToast() { $('toast').hidden = true; const f = $('flash'); if (f) f.classList.remove('on'); }
 function openModal(title, html) { $('modal-title').textContent = title; $('modal-body').innerHTML = html; $('modal').hidden = false; $('modal-ok').focus(); }
 function closeModal() { $('modal').hidden = true; }
 
