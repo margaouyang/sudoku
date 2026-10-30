@@ -1599,7 +1599,7 @@ function hintValid() {
 function hint() {
   const id = curId(), P = prep(id), b = board(id), key = curKey();
   if (S.showSol) { toast('正在看答案。先点“收起答案”。', 'warn'); return; }
-  for (let i = 0; i < P.C; i++) if (b.g[i] && b.g[i] !== P.sol[i]) { S.hint = null; S.sel = i; refreshPuzzle(); toast(`${where(P, i)}的 ${b.g[i]} 填错了，先改这一格。`, 'warn'); return; }
+  if (b.g.some((v, i) => v && v !== P.sol[i])) { S.hint = null; refreshPuzzle(); toast('盘面上有填错的数，提示没法往下推。先点“检查”找出来改掉，再来看提示。', 'warn'); return; }
   if (hintValid()) {
     const h = S.hint;
     if (h.lvl >= 2) {   // 第二步：一页一页往后翻，翻完再按就关闭（不替你填数）
