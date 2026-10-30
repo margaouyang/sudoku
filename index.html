@@ -825,7 +825,9 @@ function renderBoard() {
         });
       }
     });
-    (f.cross || []).forEach(c => { if (g[c] || (f.cands && f.cands[c]) || (f.ghost && f.ghost[c])) return; const [cx, cy] = cc(c); L += `<path d="M${cx - 20} ${cy - 20} L${cx + 20} ${cy + 20} M${cx + 20} ${cy - 20} L${cx - 20} ${cy + 20}" stroke="var(--red)" stroke-width="6" stroke-linecap="round" opacity=".85"/>`; });
+    (f.cross || []).forEach(c => { if (g[c] || (f.cands && f.cands[c]) || (f.ghost && f.ghost[c])) return; const [cx, cy] = cc(c);
+      if (f.xd) L += `<text x="${cx}" y="${cy + U * .17}" font-size="${U * .48}" font-weight="700" text-anchor="middle" fill="var(--ink-3)" opacity=".75" font-family="var(--num)">${f.xd}</text><line x1="${cx - U * .26}" y1="${cy + U * .24}" x2="${cx + U * .26}" y2="${cy - U * .24}" stroke="var(--red)" stroke-width="5" stroke-linecap="round"/>`;
+      else L += `<path d="M${cx - 20} ${cy - 20} L${cx + 20} ${cy + 20} M${cx + 20} ${cy - 20} L${cx - 20} ${cy + 20}" stroke="var(--red)" stroke-width="6" stroke-linecap="round" opacity=".85"/>`; });
     Object.entries(f.ghost || {}).forEach(([c, v]) => { c = +c; if (g[c]) return; const [x, y] = xy(c), [cx, cy] = cc(c);
       const tc = f.tint && f.tint[c] && f.tint[c] !== 'focus' ? COL[f.tint[c]] : null;
       L += `<rect x="${x + 3}" y="${y + 3}" width="${U - 6}" height="${U - 6}" rx="8" fill="var(--board-bg)" opacity=".85"/>` + (tc ? `<rect x="${x + 4}" y="${y + 4}" width="${U - 8}" height="${U - 8}" rx="10" fill="${tc}" opacity=".85"/>` : '') + `<text x="${cx}" y="${cy + big * .36 + dy}" font-size="${big}" text-anchor="middle" fill="var(--viz-strong)" opacity=".7" font-family="var(--num)">${v}</text>`; });
@@ -1196,7 +1198,8 @@ function hintStep(P, g) {
       const same = [], opp = [], oth = new Map();
       gr.cells.forEach(c => { if (g[c] || pos.includes(c)) return;
         const w = why[c].get(d), pj = [...P.peers[c]].find(j => g[j] === d), u = pj != null && unitOf(c, pj);
-        const lab = w ? (TECH_SHORT(w.tech, d) || w.tech) : u ? `同${u.name.replace(/第 \d+ /, '一')}已有 ${d}` : '和旁边的提示配不上';
+        const two = [...Array(N)].filter((_, k) => Math.abs(k + 1 - d) >= 5).length <= 1 && P.wnb[c].some((j, a2) => P.wnb[c].some((k2, b2) => b2 > a2 && P.peers[j].has(k2)));
+        const lab = two ? `同理，两个绿线邻居在同一处，放 ${d} 会重复` : w ? (TECH_SHORT(w.tech, d) || w.tech) : u ? `同${u.name.replace(/第 \d+ /, '一')}已有 ${d}` : '和旁边的提示配不上';
         oth.set(lab, [...(oth.get(lab) || []), c]); });
       const others = [...oth.entries()];
       for (let i = 0; i < C; i++) if (P.wcol[i] && P.wcol[i].comp === comp) (P.wcol[i].c === c ? same : opp).push(i);
@@ -1570,7 +1573,7 @@ function buildFrames(P, g, st, tx) {
   const frames = [], acc = { cross: new Set(), strike: {} };
   let lastIsEnd = false;
   const push = (f, isEnd = false) => {
-    f.cross = [...new Set([...(f.cross || []), ...acc.cross])];
+    f.cross = [...new Set([...(f.cross || []), ...acc.cross])]; f.xd = d;
     f.strike = Object.assign({}, acc.strike, f.strike || {});
     frames.push(f); lastIsEnd = isEnd;
   };
@@ -1659,7 +1662,13 @@ function buildFrames(P, g, st, tx) {
     finish(`所以这一格填 ${d}。`, { ghost: { [i]: d } });
   } else if (st.kind === 'hidden') {
     const gr = G[st.gk], focus = T(gr.cells, 'focus');
-    const simple = R.filter(r => !(r.viz && r.viz.info)), hard = R.filter(r => r.viz && r.viz.info);
+    let simple = R.filter(r => !(r.viz && r.viz.info)), hard = R.filter(r => r.viz && r.viz.info);
+    // 绿线“两个邻居同区”：道理一样的格子一次讲完、一起划掉
+    const compat = [...Array(N)].map((_, k) => k + 1).filter(x => Math.abs(x - d) >= 5);
+    const nbPair = c => { const nb = P.wnb ? P.wnb[c] : []; for (let a = 0; a < nb.length; a++) for (let b = a + 1; b < nb.length; b++) if (P.peers[nb[a]].has(nb[b])) return [nb[a], nb[b]]; return null; };
+    let w2 = hard.filter(r => r.viz.info.k === 'w2');
+    if (w2.length && compat.length <= 1) { const st2 = simple.filter(r => nbPair(r.x)); simple = simple.filter(r => !st2.includes(r)); w2 = w2.concat(st2); }
+    hard = hard.filter(r => !w2.includes(r));
     const blocks = new Map(), others = [];
     simple.forEach(r => { const b = blockOf(r); if (b) { const j = +b[0]; blocks.set(j, [...(blocks.get(j) || []), r.x]); } else others.push(r); });
     const SHORT = v => ({ '虚线框': `放 ${v} 后虚线框的和对不上`, '杀手框的数字组合': `所在虚线框的组合里没有 ${v}`, '区域求和': `按区域总和推算，用不到 ${v}`, '提示': `和旁边的提示配不上`, '奇偶': `奇偶不符`, '提示数占位': `${v} 已被提示占住` });
@@ -1670,12 +1679,19 @@ function buildFrames(P, g, st, tx) {
     byS.forEach((xs, k) => parts.push(`${xs.map(W).join('')} ${k}`));
     let t = `${name(gr.name)}里：${parts.join('；')}`;
     const extra = { tint: focus, circle: [...blocks.keys()], lines: [...blocks.entries()].flatMap(([j, xs]) => xs.map(x => [j, x, 'ray'])) };
-    if (!hard.length) { simple.forEach(r => addCross(r.x)); push(Object.assign({ text: t + `，只剩 ${W(i)} 能放 ${d}。` }, extra, { ghost: { [i]: d } })); }
+    if (!hard.length && !w2.length) { simple.forEach(r => addCross(r.x)); push(Object.assign({ text: t + `，只剩 ${W(i)} 能放 ${d}。` }, extra, { ghost: { [i]: d } })); }
     else {
       // 按“发现的顺序”讲：先找到技巧的形状、删掉候选，再回头用直观法捡到这个数
-      hard.forEach((r, k) => techFrames(r.x, d, r.viz, r.text, true, leadOf(r, k)));
+      if (w2.length) {
+        const cs = w2.map(r => r.x).sort((a, b) => a - b), lines = [];
+        cs.forEach(c => { const vz = w2.find(r => r.x === c).viz, pr = (vz && vz.info && vz.info.cells) || nbPair(c); if (pr) pr.forEach(j => lines.push([c, j, 'ray'])); });
+        cs.forEach(addCross);
+        push({ text: `先看绿线：${cs.map(W).join('、')} ${cs.length > 1 ? '这几格' : '这一格'}在绿线上的两个邻居，都在同一宫、同一行或同一列里（连线标出）。如果填 ${d}，两个邻居都只能填 ${list(compat.length ? compat : ['（没有数）'])}，必然重复。所以${cs.length > 1 ? '它们都' : '它'}不能填 ${d}。`, tint: Object.assign(T(gr.cells, 'focus'), T(cs, 'c')), lines }, true);
+      }
+      hard.forEach((r, k) => techFrames(r.x, d, r.viz, r.text, true, w2.length ? '再找一处：' : leadOf(r, k)));
       simple.forEach(r => addCross(r.x));
-      push(Object.assign({}, extra, { text: `刚才划掉了 ${hard.map(r => W(r.x)).join('、')} 的 ${d}。现在再看${name(gr.name)}：${parts.length ? parts.join('；') + '，' : ''}只剩 ${W(i)} 能放 ${d}。`, ghost: { [i]: d } }));
+      const all = [...w2, ...hard];
+      push(Object.assign({}, extra, { text: `刚才划掉了 ${all.map(r => W(r.x)).join('、')} 的 ${d}。现在再看${name(gr.name)}：${parts.length ? parts.join('；') + '，' : ''}只剩 ${W(i)} 能放 ${d}。`, ghost: { [i]: d } }));
     }
   } else {
     const all = []; for (let v = 1; v <= N; v++) all.push(v);
