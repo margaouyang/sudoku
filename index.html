@@ -42,6 +42,7 @@
     --hint: #D98A00;
     --hint-cell: #F5B53C;
     --tag-bg: #C2410C;
+    --case1: #1D6FD1; --case2: #A21CAF;
     --viz-a: #F4C7A1; --viz-b: #BFDDB0; --viz-c: #C9DAF0; --viz-line: #D2553F; --viz-strong: #1F4E9C;
     --hint-bg: #FFF4D9;
     --grid-thin: #9FBF9F;
@@ -191,6 +192,8 @@
   .story-n { font-size: .8em; color: var(--ink-3); }
   .story-t { font-size: 1.08em; line-height: 1.8; }
   .story-t b { color: var(--pen); }
+  .cs1 { color: var(--case1); font-weight: 700; }
+  .cs2 { color: var(--case2); font-weight: 700; }
   .ctag { display: inline-flex; align-items: center; justify-content: center; width: 1.45em; height: 1.45em; margin: 0 2px; border-radius: 50%; background: var(--tag-bg); color: #fff; font-family: var(--num); font-weight: 700; font-size: .9em; vertical-align: .05em; }
   .story-nav { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .story-nav .btn { padding: 5px 14px; }
@@ -744,6 +747,8 @@ function renderBoard() {
     Object.entries(f.tint || {}).forEach(([c, col]) => { c = +c; const [x, y] = xy(c); L += col === 'focus' ? `<rect x="${x}" y="${y}" width="${U}" height="${U}" fill="${COL.focus}" opacity=".75"/>` : `<rect x="${x + 4}" y="${y + 4}" width="${U - 8}" height="${U - 8}" rx="10" fill="${COL[col]}" opacity=".85"/>`; });
     (f.lines || []).forEach(([a, b2, kind]) => {
       const [x1, y1] = cc(a), [x2, y2] = cc(b2);
+      if (kind === 'c1' || kind === 'c2') { const col = kind === 'c1' ? 'var(--case1)' : 'var(--case2)', mid = kind === 'c1' ? 'vizA1' : 'vizA2';
+        L += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${col}" stroke-width="5" stroke-linecap="round" marker-end="url(#${mid})"/>`; return; }
       const st = kind === 'ray' ? 'stroke="var(--viz-line)" stroke-width="4" opacity=".7"' : kind === 'strong' ? 'stroke="var(--viz-strong)" stroke-width="6"' : kind === 'weak' ? 'stroke="var(--viz-strong)" stroke-width="4" stroke-dasharray="10 8"' : 'stroke="var(--viz-strong)" stroke-width="5" marker-end="url(#vizArrow)"';
       L += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" ${st} stroke-linecap="round"/>`;
     });
@@ -758,7 +763,9 @@ function renderBoard() {
         ds.forEach((v, k) => {
           const px = x + U * ((k % per) + .5) / per, py = y + U / 2 + 8 + (Math.floor(k / per) - (rowsN - 1) / 2) * fs * 1.05;
           const off = strike.has(v);
-          L += `<text x="${px}" y="${py + fs * .35}" font-size="${fs}" font-weight="700" text-anchor="middle" fill="${off ? 'var(--ink-3)' : 'var(--viz-strong)'}" opacity="${off ? .45 : 1}" font-family="var(--num)">${v}</text>`;
+          const mk = f.mark && f.mark[c] && f.mark[c][v];
+          if (mk) L += `<circle cx="${px}" cy="${py}" r="${fs * .62}" fill="var(--board-bg)" stroke="${mk}" stroke-width="4"/>`;
+          L += `<text x="${px}" y="${py + fs * .35}" font-size="${fs}" font-weight="700" text-anchor="middle" fill="${mk || (off ? 'var(--ink-3)' : 'var(--viz-strong)')}" opacity="${off ? .45 : 1}" font-family="var(--num)">${v}</text>`;
           if (off) L += `<line x1="${px - fs * .4}" y1="${py + fs * .35}" x2="${px + fs * .4}" y2="${py - fs * .35}" stroke="var(--red)" stroke-width="3.5" stroke-linecap="round"/>`;
         });
       }
@@ -768,7 +775,7 @@ function renderBoard() {
       const tc = f.tint && f.tint[c] && f.tint[c] !== 'focus' ? COL[f.tint[c]] : null;
       L += `<rect x="${x + 3}" y="${y + 3}" width="${U - 6}" height="${U - 6}" rx="8" fill="var(--board-bg)" opacity=".85"/>` + (tc ? `<rect x="${x + 4}" y="${y + 4}" width="${U - 8}" height="${U - 8}" rx="10" fill="${tc}" opacity=".85"/>` : '') + `<text x="${cx}" y="${cy + big * .36 + dy}" font-size="${big}" text-anchor="middle" fill="var(--viz-strong)" opacity=".7" font-family="var(--num)">${v}</text>`; });
     Object.entries(f.tags || {}).forEach(([c, t]) => { const [x, y] = xy(+c); L += `<circle cx="${x + U - 15}" cy="${y + 15}" r="13" fill="var(--tag-bg)"/><text x="${x + U - 15}" y="${y + 21.5}" font-size="18" font-weight="700" text-anchor="middle" fill="#fff" font-family="var(--num)">${t}</text>`; });
-    h += `<defs><marker id="vizArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--viz-strong)"/></marker></defs>` + L;
+    h += `<defs><marker id="vizArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--viz-strong)"/></marker><marker id="vizA1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="var(--case1)"/></marker><marker id="vizA2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="var(--case2)"/></marker></defs>` + L;
   }
   for (let i = 0; i < P.C; i++) { const [x, y] = xy(i); h += `<rect class="hit" data-i="${i}" x="${x}" y="${y}" width="${U}" height="${U}"/>`; }
   svg.innerHTML = h;
@@ -1490,19 +1497,22 @@ function buildFrames(P, g, st, tx) {
     } else if (I.k === 'xy') {
       const cells = [I.p, I.x, I.y], cd = pens(viz, cells), tint = Object.assign(T([I.p], 'a'), T([I.x, I.y], 'b'));
       const [c1, c2] = I.cases;
-      push({ text: `${L0}看这三格：${W(I.p)} 只能填 ${list(I.pv)}，${W(I.x)} 只能填 ${list(I.cx)}，${W(I.y)} 只能填 ${list(I.cy)}。<br>假设 ${W(I.p)} 填 ${c1[0]}，那 ${W(c1[1])} 只能填 ${I.c}。`, tint, cands: cd, ghost: { [I.p]: c1[0], [c1[1]]: I.c }, lines: [[I.p, c1[1], 'arrow']] });
-      push({ text: `如果 ${W(I.p)} 填 ${c2[0]}，那 ${W(c2[1])} 只能填 ${I.c}。`, tint, cands: cd, ghost: { [I.p]: c2[0], [c2[1]]: I.c }, lines: [[I.p, c2[1], 'arrow']] });
-      end(`两种情况都有一格是 ${I.c}，而 ${W(x)} 和这两格都在同一行、列或宫，所以它不能是 ${I.c}。（这叫“XY 翼”）`, { tint: T([I.x, I.y], 'b'), cands: pens(viz, [I.x, I.y]), lines: [[x, I.x, 'ray'], [x, I.y, 'ray']] });
+      push({ text: `${L0}先写出这三格能填的数：${W(I.p)} 只能填 ${list(I.pv)}，${W(I.x)} 只能填 ${list(I.cx)}，${W(I.y)} 只能填 ${list(I.cy)}。`, tint, cands: cd });
+      push({ text: `${W(I.p)} 只有两种可能，两种都试一下：<br><span class="cs1">① 填 ${c1[0]}</span>：${W(c1[1])} 和它${relWord(P, I.p, c1[1])}，不能再填 ${c1[0]}，只能填 ${I.c}。<br><span class="cs2">② 填 ${c2[0]}</span>：${W(c2[1])} 和它${relWord(P, I.p, c2[1])}，只能填 ${I.c}。<br>不管哪种，${W(I.x)} 和 ${W(I.y)} 里总有一格是 ${I.c}。`,
+        tint, cands: cd, mark: { [I.p]: { [c1[0]]: 'var(--case1)', [c2[0]]: 'var(--case2)' }, [c1[1]]: { [I.c]: 'var(--case1)' }, [c2[1]]: { [I.c]: 'var(--case2)' } }, lines: [[I.p, c1[1], 'c1'], [I.p, c2[1], 'c2']] });
+      end(`${W(x)} 和 ${W(I.x)}、${W(I.y)} 都有关系（同行、同列或同宫），这两格里总有一个 ${I.c}，所以 ${W(x)} 不能是 ${I.c}。（这叫“XY 翼”）`, { tint: T([I.x, I.y], 'b'), cands: pens(viz, [I.x, I.y]), lines: [[x, I.x, 'ray'], [x, I.y, 'ray']] });
     } else if (I.k === 'xyz') {
       const cells = [I.p, I.x, I.y], cd = pens(viz, cells), tint = Object.assign(T([I.p], 'a'), T([I.x, I.y], 'b'));
-      end(`${L0}看这三格：${W(I.p)} 只能填 ${list(I.pv)}，${W(I.x)} 只能填 ${list(I.cx)}，${W(I.y)} 只能填 ${list(I.cy)}。不管 ${W(I.p)} 填哪个，三格里总有一格是 ${I.c}，而 ${W(x)} 和三格都有关系，所以不能是 ${I.c}。（这叫“XYZ 翼”）`, { tint, cands: cd, lines: cells.map(c => [x, c, 'ray']) });
+      push({ text: `${L0}先写出这三格能填的数：${W(I.p)} 只能填 ${list(I.pv)}，${W(I.x)} 只能填 ${list(I.cx)}，${W(I.y)} 只能填 ${list(I.cy)}。`, tint, cands: cd });
+      end(`${W(I.p)} 填 ${I.c} 时，它自己就是 ${I.c}；填另外两个数时，${W(I.x)} 或 ${W(I.y)} 就会变成 ${I.c}。所以三格里总有一格是 ${I.c}，${W(x)} 和三格都有关系，不能是 ${I.c}。（这叫“XYZ 翼”）`, { tint, cands: cd, mark: { [I.p]: { [I.c]: 'var(--case1)' }, [I.x]: { [I.c]: 'var(--case1)' }, [I.y]: { [I.c]: 'var(--case1)' } }, lines: cells.map(c => [x, c, 'ray']) });
     } else if (I.k === 'turbot') {
       const tint = Object.assign(T([I.a1, I.a2], 'a'), T([I.b1, I.b2], 'b'));
       push({ text: `${L0}看数字 ${I.d}：在${name(I.g1)}里只能放在 ${W(I.a1)} 或 ${W(I.b1)}；在${name(I.g2)}里只能放在 ${W(I.a2)} 或 ${W(I.b2)}。`, tint: Object.assign(T(I.g1c, 'focus'), T(I.g2c, 'focus'), tint), lines: [[I.a1, I.b1, 'strong'], [I.a2, I.b2, 'strong']] });
       end(`${W(I.a1)} 和 ${W(I.a2)} 不能都是 ${I.d}，所以 ${W(I.b1)}、${W(I.b2)} 至少有一个是 ${I.d}。${W(x)} 和它俩都有关系，不能放 ${I.d}。（这叫“双强链”）`, { tint, ghost: {}, lines: [[I.a1, I.a2, 'weak'], [x, I.b1, 'ray'], [x, I.b2, 'ray']] });
     } else if (I.k === 'w') {
       const cd = pens(viz, [I.x, I.y]), tint = Object.assign(T([I.x, I.y], 'b'), T([I.u, I.v], 'a'));
-      push({ text: `${L0}${W(I.x)} 和 ${W(I.y)} 都只能填 ${I.A} 或 ${I.B}。而在${name(I.gr)}里，${I.p} 只能放在 ${W(I.u)} 或 ${W(I.v)}，它们分别管着这两格，所以这两格不可能都是 ${I.p}。`, tint: Object.assign(T(I.grc, 'focus'), tint), cands: cd, lines: [[I.u, I.v, 'strong'], [I.u, I.x, 'weak'], [I.v, I.y, 'weak']] });
+      push({ text: `${L0}先写出候选数：${W(I.x)} 和 ${W(I.y)} 都只能填 ${I.A} 或 ${I.B}。`, tint, cands: cd });
+      push({ text: `在${name(I.gr)}里，${I.p} 只能放在 ${W(I.u)} 或 ${W(I.v)}，它们分别管着这两格，所以这两格不可能都是 ${I.p}。`, tint: Object.assign(T(I.grc, 'focus'), tint), cands: cd, lines: [[I.u, I.v, 'strong'], [I.u, I.x, 'weak'], [I.v, I.y, 'weak']] });
       end(`那它俩至少有一个是 ${I.q}，${W(x)} 和它俩都有关系，不能填 ${I.q}。（这叫“W 翼”）`, { tint, cands: cd, lines: [[x, I.x, 'ray'], [x, I.y, 'ray']] });
     } else if (I.k === 'xchain' || I.k === 'xychain') {
       const path = I.path, steps = [];
