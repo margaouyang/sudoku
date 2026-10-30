@@ -186,6 +186,18 @@
   .hint-box li { cursor: pointer; border-radius: 4px; padding: 1px 4px; margin-left: -4px; }
   .hint-box li:hover { background: var(--cell-hint); }
   .hint-box li.on { background: var(--hint-cell); }
+  .story { display: grid; gap: 8px; margin-top: 4px; }
+  .story-n { font-size: .8em; color: var(--ink-3); }
+  .story-t { font-size: 1.08em; line-height: 1.8; }
+  .story-t b { color: var(--pen); }
+  .story-nav { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .story-nav .btn { padding: 5px 14px; }
+  .story-nav .btn[disabled] { opacity: .35; cursor: default; }
+  .story-nav .dots { display: flex; gap: 5px; flex: 1; justify-content: center; flex-wrap: wrap; }
+  .story-nav .dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--rule); }
+  .story-nav .dots i.on { background: var(--hint); }
+  .story-all { margin-top: 6px; font-size: .9em; color: var(--ink-2); }
+  .story-all summary { cursor: pointer; color: var(--ink-3); }
   .hint-box .foot { margin-top: 4px; font-size: .8em; color: var(--ink-3); }
   .hint-box ul { margin: 6px 0 4px; padding-left: 1.3em; }
   @keyframes hintIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
@@ -721,42 +733,39 @@ function renderBoard() {
       });
     }
   }
-  // ---- 第三步图解 ----
-  if (hs && hs.lvl >= 3 && hs.tx.reasons) {
+  // ---- 第三步：分步图解 ----
+  if (hs && hs.lvl >= 3 && hs.frames) {
+    const f = hs.frames[hs.fi] || {};
     const cc = c => { const [x, y] = xy(c); return [x + U / 2, y + U / 2]; };
-    const cols = N === 4 ? 2 : 3, rows = Math.ceil(N / cols);
-    const penXY = (c, v) => { const [x, y] = xy(c), k = v - 1; return [x + U * ((k % cols) + .5) / cols, y + U * (Math.floor(k / cols) + .5) / Math.max(rows, 3) + (rows < 3 ? U / 6 : 0) + dy]; };
-    const list = hs.rf != null ? [hs.tx.reasons[hs.rf]] : hs.tx.reasons;
-    const ROLE = { pivot: 'var(--viz-a)', wing: 'var(--viz-b)', base: 'var(--viz-c)', cage: 'var(--viz-c)', rule: 'var(--viz-c)' };
-    let tints = '', lines = '', marks = '', pens = '';
-    const tinted = new Set(), penDone = new Set();
-    list.forEach(r => {
-      const v = r.viz;
-      if (v) {
-        Object.entries(v.roles || {}).forEach(([c, role]) => {
-          c = +c; const [x, y] = xy(c), [cx, cy] = cc(c);
-          if (role === 'block') marks += `<circle cx="${cx}" cy="${cy}" r="${U * .4}" fill="none" stroke="var(--viz-line)" stroke-width="4"/>`;
-          else if (!tinted.has(c) && c !== hs.cell) { tinted.add(c); tints += `<rect x="${x + 3}" y="${y + 3}" width="${U - 6}" height="${U - 6}" rx="8" fill="${ROLE[role] || 'var(--viz-c)'}" opacity=".55"/>`; }
+    const COL = { focus: 'var(--cell-hint)', a: 'var(--viz-a)', b: 'var(--viz-b)', c: 'var(--viz-c)' };
+    let L = '';
+    Object.entries(f.tint || {}).forEach(([c, col]) => { c = +c; const [x, y] = xy(c); L += col === 'focus' ? `<rect x="${x}" y="${y}" width="${U}" height="${U}" fill="${COL.focus}" opacity=".75"/>` : `<rect x="${x + 4}" y="${y + 4}" width="${U - 8}" height="${U - 8}" rx="10" fill="${COL[col]}" opacity=".85"/>`; });
+    (f.lines || []).forEach(([a, b2, kind]) => {
+      const [x1, y1] = cc(a), [x2, y2] = cc(b2);
+      const st = kind === 'ray' ? 'stroke="var(--viz-line)" stroke-width="4" opacity=".7"' : kind === 'strong' ? 'stroke="var(--viz-strong)" stroke-width="6"' : kind === 'weak' ? 'stroke="var(--viz-strong)" stroke-width="4" stroke-dasharray="10 8"' : 'stroke="var(--viz-strong)" stroke-width="5" marker-end="url(#vizArrow)"';
+      L += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" ${st} stroke-linecap="round"/>`;
+    });
+    (f.circle || []).forEach(c => { const [cx, cy] = cc(c); L += `<circle cx="${cx}" cy="${cy}" r="${U * .42}" fill="none" stroke="var(--viz-line)" stroke-width="5"/>`; });
+    // 候选数：放大写在格子中间，划掉的用红线
+    Object.entries(f.cands || {}).forEach(([c, ds]) => {
+      c = +c; if (g[c]) return; const [x, y] = xy(c), [cx, cy] = cc(c);
+      const strike = new Set((f.strike || {})[c] || []), n = ds.length, per = n > 6 ? 3 : n > 4 ? 3 : n, rowsN = Math.ceil(n / per), fs = n > 4 ? 26 : 34;
+      if (!(f.ghost && f.ghost[c])) {
+        L += `<rect x="${x + 3}" y="${y + 3}" width="${U - 6}" height="${U - 6}" rx="8" fill="var(--board-bg)" opacity=".8"/>`;
+        if (f.tint && f.tint[c] && f.tint[c] !== 'focus') L += `<rect x="${x + 4}" y="${y + 4}" width="${U - 8}" height="${U - 8}" rx="10" fill="${COL[f.tint[c]]}" opacity=".85"/>`;
+        ds.forEach((v, k) => {
+          const px = x + U * ((k % per) + .5) / per, py = y + U / 2 + (Math.floor(k / per) - (rowsN - 1) / 2) * fs * 1.05;
+          const off = strike.has(v);
+          L += `<text x="${px}" y="${py + fs * .35}" font-size="${fs}" font-weight="700" text-anchor="middle" fill="${off ? 'var(--ink-3)' : 'var(--viz-strong)'}" opacity="${off ? .45 : 1}" font-family="var(--num)">${v}</text>`;
+          if (off) L += `<line x1="${px - fs * .4}" y1="${py + fs * .35}" x2="${px + fs * .4}" y2="${py - fs * .35}" stroke="var(--red)" stroke-width="3.5" stroke-linecap="round"/>`;
         });
-        (v.links || []).forEach(([a, b2, kind]) => {
-          const [x1, y1] = cc(a), [x2, y2] = cc(b2);
-          const st = kind === 'ray' ? 'stroke="var(--viz-line)" stroke-width="3.5" opacity=".75"' : kind === 'strong' ? 'stroke="var(--viz-strong)" stroke-width="5"' : kind === 'weak' ? 'stroke="var(--viz-strong)" stroke-width="3.5" stroke-dasharray="10 8"' : 'stroke="var(--viz-line)" stroke-width="3.5" stroke-dasharray="3 7"';
-          lines += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" ${st} stroke-linecap="round"/>`;
-        });
-        Object.entries(v.pens || {}).forEach(([c, ds]) => {
-          c = +c; if (g[c] || c === hs.cell && r.x !== c) return;
-          ds.forEach(dd => { const key = c + ':' + dd; if (penDone.has(key)) return; penDone.add(key); const [px, py] = penXY(c, dd);
-            pens += `<text x="${px}" y="${py + cfs * .35}" font-size="${cfs}" font-weight="700" text-anchor="middle" fill="${dd === v.dig ? 'var(--viz-strong)' : 'var(--graphite)'}" font-family="var(--num)">${dd}</text>`; });
-        });
-      }
-      // 被排除的位置：红叉
-      if (!g[r.x]) {
-        if (r.x === hs.cell) { const [px, py] = penXY(r.x, r.v); marks += `<path d="M${px - 11} ${py - 11} L${px + 11} ${py + 11} M${px + 11} ${py - 11} L${px - 11} ${py + 11}" stroke="var(--red)" stroke-width="4" stroke-linecap="round"/>`; }
-        else { const [cx, cy] = cc(r.x); marks += `<path d="M${cx - 16} ${cy - 16} L${cx + 16} ${cy + 16} M${cx + 16} ${cy - 16} L${cx - 16} ${cy + 16}" stroke="var(--red)" stroke-width="5" stroke-linecap="round" opacity=".85"/>`; }
       }
     });
-    h += tints + lines + pens + marks;
-    if (!g[hs.cell]) { const [cx, cy] = cc(hs.cell); h += `<text x="${cx}" y="${cy + big * .36 + dy}" font-size="${big}" text-anchor="middle" fill="var(--viz-strong)" opacity=".55" font-family="var(--num)">${hs.d}</text>`; }
+    (f.cross || []).forEach(c => { if (g[c] || (f.cands && f.cands[c]) || (f.ghost && f.ghost[c])) return; const [cx, cy] = cc(c); L += `<path d="M${cx - 20} ${cy - 20} L${cx + 20} ${cy + 20} M${cx + 20} ${cy - 20} L${cx - 20} ${cy + 20}" stroke="var(--red)" stroke-width="6" stroke-linecap="round" opacity=".85"/>`; });
+    Object.entries(f.ghost || {}).forEach(([c, v]) => { c = +c; if (g[c]) return; const [x, y] = xy(c), [cx, cy] = cc(c);
+      const tc = f.tint && f.tint[c] && f.tint[c] !== 'focus' ? COL[f.tint[c]] : null;
+      L += `<rect x="${x + 3}" y="${y + 3}" width="${U - 6}" height="${U - 6}" rx="8" fill="var(--board-bg)" opacity=".85"/>` + (tc ? `<rect x="${x + 4}" y="${y + 4}" width="${U - 8}" height="${U - 8}" rx="10" fill="${tc}" opacity=".85"/>` : '') + `<text x="${cx}" y="${cy + big * .36 + dy}" font-size="${big}" text-anchor="middle" fill="var(--viz-strong)" opacity=".7" font-family="var(--num)">${v}</text>`; });
+    h += `<defs><marker id="vizArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--viz-strong)"/></marker></defs>` + L;
   }
   for (let i = 0; i < P.C; i++) { const [x, y] = xy(i); h += `<rect class="hit" data-i="${i}" x="${x}" y="${y}" width="${U}" height="${U}"/>`; }
   svg.innerHTML = h;
@@ -786,11 +795,22 @@ function renderHeader() {
   { const hb = $('hint-box'), hv = hintValid();
     if (!hv) { hb.hidden = true; hb.dataset.k = ''; }
     else {
-      const h = S.hint, k = h.id + '-' + h.lvl;
+      const h = S.hint, k = h.id + '-' + h.lvl + '-' + (h.fi || 0);
       if (hb.dataset.k !== k) {
+        const anim = hb.dataset.k.split('-').slice(0, 2).join('-') !== k.split('-').slice(0, 2).join('-');
         hb.dataset.k = k;
-        hb.innerHTML = `<button type="button" class="hint-x" id="hint-x" aria-label="关闭提示" title="关闭提示（Esc）">×</button><span class="hint-tag">提示 ${h.lvl}/3</span>${h.lvl === 1 ? h.tx.L1 : h.lvl === 2 ? h.tx.L2 : h.tx.L3}<div class="foot">${h.lvl === 1 ? '再按 H 看用什么方法' : h.lvl === 2 ? '再按 H 看答案和图解' : '点上面任意一条理由，盘面上只显示那一条的图解。答案要你自己填，填好后按 H 看下一个提示'}，按 Esc 关闭提示。</div>`;
-        hb.hidden = false; hb.style.animation = 'none'; void hb.offsetWidth; hb.style.animation = '';
+        let body;
+        if (h.lvl < 3) body = (h.lvl === 1 ? h.tx.L1 : h.tx.L2) + `<div class="foot">${h.lvl === 1 ? '再按 H 看用什么方法' : '再按 H 看分步讲解'}，按 Esc 关闭提示。</div>`;
+        else {
+          const f = h.frames[h.fi], n = h.frames.length;
+          body = `<div class="story"><div class="story-n">第 ${h.fi + 1} / ${n} 页</div><div class="story-t">${f.text}</div>
+            <div class="story-nav"><button type="button" class="btn" id="st-prev" ${h.fi ? '' : 'disabled'}>‹ 上一页</button><span class="dots">${h.frames.map((_, q) => `<i class="${q === h.fi ? 'on' : ''}"></i>`).join('')}</span><button type="button" class="btn solid" id="st-next">${h.fi < n - 1 ? '下一页 ›' : '看完了，关闭'}</button></div></div>
+            <details class="story-all"><summary>看完整文字说明</summary>${h.tx.L3}</details>
+            <div class="foot">按 H 翻下一页，按 Esc 关闭。答案要你自己填，填好后按 H 看下一个提示。</div>`;
+        }
+        hb.innerHTML = `<button type="button" class="hint-x" id="hint-x" aria-label="关闭提示" title="关闭提示（Esc）">×</button><span class="hint-tag">提示 ${h.lvl}/3</span>` + body;
+        hb.hidden = false;
+        if (anim) { hb.style.animation = 'none'; void hb.offsetWidth; hb.style.animation = ''; }
       }
     }
   }
@@ -1052,7 +1072,7 @@ function hintStep(P, g) {
     if (viz) { viz.pens = {}; (viz.pc || []).concat([i]).forEach(c => { if (!g[c]) viz.pens[c] = [...cand[c]]; }); viz.dig = viz.dig || d; }
     cand[i].delete(d); why[i].set(d, { text, tech, viz }); techs.add(tech); return true;
   };
-  const V = (roles, links = [], pc = []) => ({ roles, links, pc });
+  const V = (roles, links = [], pc = [], info = null) => ({ roles, links, pc, info });
   const R = (cells, role) => Object.fromEntries(cells.map(c => [c, role]));
   /* ===== 推理技法：按“直观法 → 候选数法”的顺序，每次有进展就回到最简单的方法重新找 ===== */
   const W_ = x => where(P, x), WL = a => list(a.map(W_));
@@ -1133,7 +1153,7 @@ function hintStep(P, g) {
       for (let b = 0; b < G.length; b++) {
         if (b === a || !pos.every(x => G[b].cells.includes(x))) continue;
         for (const x of G[b].cells) if (!g[x] && !pos.includes(x) && cand[x].has(d))
-          ch = elim(x, d, `${G[a].name}里的 ${d} 只能放在它和${G[b].name}重合的格子（${WL(pos)}）中，形成区块，所以${G[b].name}的其它格不能是 ${d}`, '区块摒除', V(R(pos, 'base'), [], pos)) || ch;
+          ch = elim(x, d, `${G[a].name}里的 ${d} 只能放在它和${G[b].name}重合的格子（${WL(pos)}）中，形成区块，所以${G[b].name}的其它格不能是 ${d}`, '区块摒除', V(R(pos, 'base'), [], pos, { k: 'locked', d, from: G[a].name, to: G[b].name, pos, fromCells: G[a].cells, toCells: G[b].cells })) || ch;
       }
     }
     return ch;
@@ -1149,7 +1169,7 @@ function hintStep(P, g) {
         const cells = [...new Set(ps.flat())];
         if (cells.length !== k) continue;
         for (const x of cells) for (const v of [...cand[x]]) if (!dd.includes(v))
-          ch = elim(x, v, `${gr.name}里的 ${list(dd)} 这 ${k} 个数只能放在${WL(cells)}这 ${k} 格（${tech}），这几格被它们占满了，不能再填 ${v}`, tech, Object.assign(V(R(cells, 'base'), [], cells), { dig: v })) || ch;
+          ch = elim(x, v, `${gr.name}里的 ${list(dd)} 这 ${k} 个数只能放在${WL(cells)}这 ${k} 格（${tech}），这几格被它们占满了，不能再填 ${v}`, tech, Object.assign(V(R(cells, 'base'), [], cells, { k: 'hsub', gr: gr.name, grCells: gr.cells, digits: dd, cells }), { dig: v })) || ch;
       }
     }
     return ch;
@@ -1192,7 +1212,7 @@ function hintStep(P, g) {
         const u = [...new Set(cs.flatMap(x => [...cand[x]]))];
         if (u.length !== k) continue;
         for (const x of gr.cells) if (!g[x] && !cs.includes(x)) for (const d of u)
-          ch = elim(x, d, `${gr.name}里${WL(cs)}这 ${k} 格的候选合起来只有 ${list(u.sort((a, b) => a - b))}（${tech}），这些数一定被它们占了，所以这格不能是 ${d}`, tech, V(R(cs, 'base'), [], cs)) || ch;
+          ch = elim(x, d, `${gr.name}里${WL(cs)}这 ${k} 格的候选合起来只有 ${list(u.sort((a, b) => a - b))}（${tech}），这些数一定被它们占了，所以这格不能是 ${d}`, tech, V(R(cs, 'base'), [], cs, { k: 'nsub', gr: gr.name, grCells: gr.cells, digits: u.slice(), cells: cs })) || ch;
       }
     }
     return ch;
@@ -1209,7 +1229,7 @@ function hintStep(P, g) {
           const baseCells = new Set(cs.flatMap(o => o.b.cells));
           const nameB = cs.map(o => o.b.name.replace(/[第 行列]/g, '')).join('、'), nameC = cvIdx.sort((a, b) => a - b).map(v => v + 1).join('、');
           for (const ci of cvIdx) for (const x of cover[ci].cells) if (!g[x] && !baseCells.has(x) && cand[x].has(d))
-            ch = elim(x, d, `数字 ${d} 在第 ${nameB} ${bn}里都只能出现在第 ${nameC} ${cn}上（${FISH[k]}），这几${bn}的 ${d} 一定占满这几${cn}，所以第 ${nameC} ${cn}的其它格不能是 ${d}`, FISH[k], V(R(cs.flatMap(o => o.ps), 'base'), [], cs.flatMap(o => o.ps))) || ch;
+            ch = elim(x, d, `数字 ${d} 在第 ${nameB} ${bn}里都只能出现在第 ${nameC} ${cn}上（${FISH[k]}），这几${bn}的 ${d} 一定占满这几${cn}，所以第 ${nameC} ${cn}的其它格不能是 ${d}`, FISH[k], V(R(cs.flatMap(o => o.ps), 'base'), [], cs.flatMap(o => o.ps), { k: 'fish', d, name: FISH[k], bn, cn, lines: cs.map(o => ({ name: o.b.name, ps: o.ps, cells: o.b.cells })), cover: cvIdx.map(ci => ({ name: cover[ci].name, cells: cover[ci].cells })) })) || ch;
         }
       }
     }
@@ -1228,7 +1248,7 @@ function hintStep(P, g) {
           if (!cand[x].has(xa) || !cand[y].has(ya) || cand[x].has(ya) || cand[y].has(xa)) continue;
           const c = cx.find(v => v !== xa); if (c == null || cy.find(v => v !== ya) !== c || c === A || c === B) continue;
           for (const z of empties()) if (z !== p && z !== x && z !== y && cand[z].has(c) && sees(z, x) && sees(z, y))
-            ch = elim(z, c, `XY 翼：枢纽${W_(p)}只能是 ${A} 或 ${B}，两翼${W_(x)}（${list(cx)}）和${W_(y)}（${list(cy)}）里总有一格是 ${c}，这格同时看得见两翼，所以不能是 ${c}`, 'XY 翼', V({ [p]: 'pivot', [x]: 'wing', [y]: 'wing' }, [[p, x, 'weak'], [p, y, 'weak']], [p, x, y])) || ch;
+            ch = elim(z, c, `XY 翼：枢纽${W_(p)}只能是 ${A} 或 ${B}，两翼${W_(x)}（${list(cx)}）和${W_(y)}（${list(cy)}）里总有一格是 ${c}，这格同时看得见两翼，所以不能是 ${c}`, 'XY 翼', V({ [p]: 'pivot', [x]: 'wing', [y]: 'wing' }, [[p, x, 'weak'], [p, y, 'weak']], [p, x, y], { k: 'xy', p, x, y, c, pv: [A, B], cx, cy, cases: [[xa === A ? A : B, x], [xa === A ? B : A, y]] })) || ch;
         }
       }
     }
@@ -1245,7 +1265,7 @@ function hintStep(P, g) {
         if (common.length !== 1 || new Set([...cand[x], ...cand[y]]).size !== 3) continue;
         const c = common[0];
         for (const z of empties()) if (z !== p && z !== x && z !== y && cand[z].has(c) && sees(z, p) && sees(z, x) && sees(z, y))
-          ch = elim(z, c, `XYZ 翼：${W_(p)}（${list(pv)}）、${W_(x)}（${list([...cand[x]])}）、${W_(y)}（${list([...cand[y]])}）三格里一定有一格是 ${c}，这格同时看得见这三格，所以不能是 ${c}`, 'XYZ 翼', V({ [p]: 'pivot', [x]: 'wing', [y]: 'wing' }, [[p, x, 'weak'], [p, y, 'weak']], [p, x, y])) || ch;
+          ch = elim(z, c, `XYZ 翼：${W_(p)}（${list(pv)}）、${W_(x)}（${list([...cand[x]])}）、${W_(y)}（${list([...cand[y]])}）三格里一定有一格是 ${c}，这格同时看得见这三格，所以不能是 ${c}`, 'XYZ 翼', V({ [p]: 'pivot', [x]: 'wing', [y]: 'wing' }, [[p, x, 'weak'], [p, y, 'weak']], [p, x, y], { k: 'xyz', p, x, y, c, pv, cx: [...cand[x]], cy: [...cand[y]] })) || ch;
       }
     }
     return ch;
@@ -1263,7 +1283,7 @@ function hintStep(P, g) {
         for (const [a1, b1] of [[L[i].a, L[i].b], [L[i].b, L[i].a]]) for (const [a2, b2] of [[L[j].a, L[j].b], [L[j].b, L[j].a]]) {
           if (new Set([a1, b1, a2, b2]).size !== 4 || !sees(a1, a2)) continue;
           for (const z of empties()) if (z !== b1 && z !== b2 && cand[z].has(d) && sees(z, b1) && sees(z, b2))
-            ch = elim(z, d, `双强链：${L[i].gr.name}里的 ${d} 只能在${W_(a1)}或${W_(b1)}，${L[j].gr.name}里的 ${d} 只能在${W_(a2)}或${W_(b2)}；${W_(a1)}和${W_(a2)}互相看得见，最多一个是 ${d}，所以${W_(b1)}和${W_(b2)}至少有一个是 ${d}，这格同时看得见它俩，不能是 ${d}`, '双强链（摩天楼、风筝）', V({ [a1]: 'base', [a2]: 'base', [b1]: 'wing', [b2]: 'wing' }, [[a1, b1, 'strong'], [a2, b2, 'strong'], [a1, a2, 'weak']], [a1, b1, a2, b2])) || ch;
+            ch = elim(z, d, `双强链：${L[i].gr.name}里的 ${d} 只能在${W_(a1)}或${W_(b1)}，${L[j].gr.name}里的 ${d} 只能在${W_(a2)}或${W_(b2)}；${W_(a1)}和${W_(a2)}互相看得见，最多一个是 ${d}，所以${W_(b1)}和${W_(b2)}至少有一个是 ${d}，这格同时看得见它俩，不能是 ${d}`, '双强链（摩天楼、风筝）', V({ [a1]: 'base', [a2]: 'base', [b1]: 'wing', [b2]: 'wing' }, [[a1, b1, 'strong'], [a2, b2, 'strong'], [a1, a2, 'weak']], [a1, b1, a2, b2], { k: 'turbot', d, a1, b1, a2, b2, g1: L[i].gr.name, g1c: L[i].gr.cells, g2: L[j].gr.name, g2c: L[j].gr.cells })) || ch;
         }
       }
     }
@@ -1280,7 +1300,7 @@ function hintStep(P, g) {
         for (const [u, v] of [[L.a, L.b], [L.b, L.a]]) {
           if ([x, y].includes(u) || [x, y].includes(v) || !sees(u, x) || !sees(v, y)) continue;
           for (const z of empties()) if (z !== x && z !== y && cand[z].has(q) && sees(z, x) && sees(z, y))
-            ch = elim(z, q, `W 翼：${W_(x)}和${W_(y)}都只剩 ${A}、${B}；${L.gr.name}里的 ${p} 只能在${W_(u)}或${W_(v)}，它们分别看得见这两格，所以这两格不可能都是 ${p}，至少一格是 ${q}，这格同时看得见它俩，不能是 ${q}`, 'W 翼', V({ [x]: 'wing', [y]: 'wing', [u]: 'base', [v]: 'base' }, [[u, v, 'strong'], [u, x, 'weak'], [v, y, 'weak']], [x, y, u, v])) || ch;
+            ch = elim(z, q, `W 翼：${W_(x)}和${W_(y)}都只剩 ${A}、${B}；${L.gr.name}里的 ${p} 只能在${W_(u)}或${W_(v)}，它们分别看得见这两格，所以这两格不可能都是 ${p}，至少一格是 ${q}，这格同时看得见它俩，不能是 ${q}`, 'W 翼', V({ [x]: 'wing', [y]: 'wing', [u]: 'base', [v]: 'base' }, [[u, v, 'strong'], [u, x, 'weak'], [v, y, 'weak']], [x, y, u, v], { k: 'w', x, y, A, B, p, q, u, v, gr: L.gr.name, grc: L.gr.cells })) || ch;
         }
       }
     }
@@ -1305,7 +1325,7 @@ function hintStep(P, g) {
             const np = [...path, n];
             if (nextStrong && np.length >= 6) {   // 至少 5 个链节（3 节的已由双强链处理）
               for (const z of empties()) if (!np.includes(z) && cand[z].has(d) && sees(z, s) && sees(z, n))
-                ch = elim(z, d, `X 链（数字 ${d}）：沿着${WL(np)}强弱交替推下去，两端${W_(s)}和${W_(n)}至少有一个是 ${d}，这格同时看得见两端，不能是 ${d}`, 'X 链', V(Object.assign(R(np, 'base'), { [s]: 'wing', [n]: 'wing' }), np.slice(1).map((c, k) => [np[k], c, k % 2 ? 'weak' : 'strong']), np)) || ch;
+                ch = elim(z, d, `X 链（数字 ${d}）：沿着${WL(np)}强弱交替推下去，两端${W_(s)}和${W_(n)}至少有一个是 ${d}，这格同时看得见两端，不能是 ${d}`, 'X 链', V(Object.assign(R(np, 'base'), { [s]: 'wing', [n]: 'wing' }), np.slice(1).map((c, k) => [np[k], c, k % 2 ? 'weak' : 'strong']), np, { k: 'xchain', d, path: np })) || ch;
               if (ch) return true;
             }
             const key = n + ':' + (np.length % 2);
@@ -1331,7 +1351,7 @@ function hintStep(P, g) {
           if (nout === z0 && np.length >= 3) {
             let ch = false;
             for (const z of empties()) if (!np.includes(z) && cand[z].has(z0) && sees(z, s) && sees(z, n))
-              ch = elim(z, z0, `XY 链：${WL(np)}这串只剩两个候选的格子首尾相连；如果${W_(s)}不是 ${z0}，顺着推下去${W_(n)}一定是 ${z0}，所以两端至少有一个是 ${z0}，这格同时看得见两端，不能是 ${z0}`, 'XY 链', V(Object.assign(R(np, 'base'), { [s]: 'wing', [n]: 'wing' }), np.slice(1).map((c, k) => [np[k], c, 'weak']), np)) || ch;
+              ch = elim(z, z0, `XY 链：${WL(np)}这串只剩两个候选的格子首尾相连；如果${W_(s)}不是 ${z0}，顺着推下去${W_(n)}一定是 ${z0}，所以两端至少有一个是 ${z0}，这格同时看得见两端，不能是 ${z0}`, 'XY 链', V(Object.assign(R(np, 'base'), { [s]: 'wing', [n]: 'wing' }), np.slice(1).map((c, k) => [np[k], c, 'weak']), np, { k: 'xychain', z0, path: np })) || ch;
             if (ch) return true;
           }
           const key = n + ':' + nout; if (seen.has(key)) continue; seen.add(key);
@@ -1391,7 +1411,7 @@ function hintTexts(P, g, st) {
     let r = b ? { text: b.text, viz: b.viz } : null;
     if (!r) { const w = st.why[x].get(v); if (w) { used.add(w.tech); r = { text: w.text, viz: w.viz }; } }
     if (!r) r = { text: '结合前面的推理可以排除', viz: null };
-    reasons.push({ x, v, viz: r.viz });
+    reasons.push({ x, v, viz: r.viz, text: r.text });
     return `<span class="rs" data-r="${reasons.length - 1}">${r.text}</span>`;
   };
   const L1 = st.kind === 'hidden' ? `看${W}这一格（盘面上橙色闪烁的格子）。它现在可以唯一确定，先想想看。`
@@ -1423,6 +1443,127 @@ function hintTexts(P, g, st) {
   }
   return { L1, L2, L3, focus, reasons };
 }
+/* ---------- 第三步：分步图解（给初学者看的“连环画”） ---------- */
+function relWord(P, a, b) {
+  const G = groupInfo(P);
+  const gr = G.find(x => x.cells.includes(a) && x.cells.includes(b));
+  if (gr) return { row: '在同一行', col: '在同一列', box: '在同一宫', diag: '在同一条对角线上', extra: '在同一个灰色区域里' }[gr.t] || '在同一区域';
+  const dr = Math.abs(Math.floor(a / P.N) - Math.floor(b / P.N)), dc = Math.abs(a % P.N - b % P.N);
+  if (dr === 1 && dc === 1) return '斜角相邻（无缘规则）';
+  if (dr * dc === 2) return '处在马步位置（无马规则）';
+  return '互相影响';
+}
+function buildFrames(P, g, st, tx) {
+  const W = c => `<b>${where(P, c)}</b>`, i = st.cell, d = st.d, N = P.N, G = groupInfo(P);
+  const frames = [], acc = { cross: new Set(), strike: {} };
+  const push = f => {
+    f.cross = [...new Set([...(f.cross || []), ...acc.cross])];
+    f.strike = Object.assign({}, acc.strike, f.strike || {});
+    frames.push(f);
+  };
+  const addCross = x => acc.cross.add(x);
+  const addStrike = (x, v) => { acc.strike[x] = [...new Set([...(acc.strike[x] || []), v])]; };
+  const pens = (viz, cells) => Object.fromEntries(cells.filter(c => !g[c]).map(c => [c, (viz && viz.pens && viz.pens[c]) || candidates(P, g, c)]));
+  const T = (cells, color) => Object.fromEntries(cells.map(c => [c, color]));
+  const name = (s) => `<b>${s}</b>`;
+  // 一条“为什么 x 不能是 v”的复杂理由，拆成几步
+  const techFrames = (x, v, viz, text, isCell) => {
+    const I = viz && viz.info;
+    const end = (t, extra = {}) => { if (isCell) addCross(x); else addStrike(x, v); push(Object.assign({ text: t }, extra)); };
+    if (!I) { end(text.replace(/<[^>]+>/g, ''), { tint: viz ? T(Object.keys(viz.roles || {}).map(Number), 'c') : {} }); return; }
+    if (I.k === 'locked') {
+      push({ text: `先看${name(I.from)}：数字 ${I.d} 在这里只能放在标蓝的这几格，而它们都在${name(I.to)}里。`, tint: Object.assign(T(I.fromCells, 'focus'), T(I.pos, 'c')) });
+      end(`所以${name(I.to)}的 ${I.d} 一定在这几格中的某一格，${I.to}里其它格都不能再放 ${I.d}，${W(x)} 也不行。`, { tint: Object.assign(T(I.toCells, 'focus'), T(I.pos, 'c')) });
+    } else if (I.k === 'hsub') {
+      push({ text: `看${name(I.gr)}：数字 ${list(I.digits)} 在这里都只能放进标蓝的这 ${I.cells.length} 格。`, tint: Object.assign(T(I.grCells, 'focus'), T(I.cells, 'c')) });
+      end(`${I.cells.length} 个数正好占满这 ${I.cells.length} 格，这几格就没有位置留给别的数了，所以 ${W(x)} 不能填 ${v}。`, { tint: T(I.cells, 'c'), cands: pens(viz, I.cells) });
+    } else if (I.k === 'nsub') {
+      push({ text: `看${name(I.gr)}里标蓝的这 ${I.cells.length} 格：它们能填的数合起来只有 ${list(I.digits)} 这 ${I.digits.length} 个。`, tint: Object.assign(T(I.grCells, 'focus'), T(I.cells, 'c')), cands: pens(viz, I.cells) });
+      end(`这 ${I.digits.length} 个数一定被这几格用掉，${I.gr}里别的格子就不能再填它们，所以 ${W(x)} 不能填 ${v}。`, { tint: T(I.cells, 'c'), cands: pens(viz, I.cells) });
+    } else if (I.k === 'fish') {
+      I.lines.forEach(L => push({ text: `看${name(L.name)}：数字 ${I.d} 只能放在标蓝的 ${L.ps.length} 格。`, tint: Object.assign(T(L.cells, 'focus'), T(L.ps, 'c')) }));
+      const covers = I.cover.map(c => c.name).join('和');
+      push({ text: `这 ${I.lines.length} ${I.bn}的 ${I.d} 全都落在${name(covers)}上，而且每一${I.cn}最多只能有一个 ${I.d}。所以${covers}的 ${I.d}，一定被这几${I.bn}用掉了。`, tint: Object.assign(T(I.cover.flatMap(c => c.cells), 'focus'), T(I.lines.flatMap(L => L.ps), 'c')) });
+      end(`${W(x)} 也在${covers}上，但不在这几${I.bn}里，所以它不能放 ${I.d}。（这个技巧叫“${I.name}”）`, { tint: T(I.lines.flatMap(L => L.ps), 'c') });
+    } else if (I.k === 'xy' || I.k === 'xyz') {
+      const cells = [I.p, I.x, I.y], cd = pens(viz, cells), tint = Object.assign(T([I.p], 'a'), T([I.x, I.y], 'b'));
+      push({ text: `先看这三格能填什么：${W(I.p)} 只能填 ${list(I.pv)}；${W(I.x)} 只能填 ${list(I.cx)}；${W(I.y)} 只能填 ${list(I.cy)}。`, tint, cands: cd });
+      if (I.k === 'xy') {
+        I.cases.forEach(([a, w]) => push({ text: `假设 ${W(I.p)} 填 ${a}：${W(w)} 和它${relWord(P, I.p, w)}，不能再填 ${a}，只能填 ${I.c}。`, tint, cands: cd, ghost: { [I.p]: a, [w]: I.c }, lines: [[I.p, w, 'arrow']] }));
+        end(`两种情况里，${W(I.x)} 和 ${W(I.y)} 总有一格是 ${I.c}。${W(x)} 和 ${W(I.x)} ${relWord(P, x, I.x)}，和 ${W(I.y)} ${relWord(P, x, I.y)}，所以它不能填 ${I.c}。（这个技巧叫“XY 翼”）`, { tint: Object.assign({}, tint, T([I.x, I.y], 'b')), cands: cd, lines: [[x, I.x, 'ray'], [x, I.y, 'ray']] });
+      } else {
+        push({ text: `${W(I.p)} 填 ${I.c} 时，它自己就是 ${I.c}；填别的数时，像上面那样推，${W(I.x)} 或 ${W(I.y)} 会变成 ${I.c}。`, tint, cands: cd });
+        end(`所以这三格里总有一格是 ${I.c}。${W(x)} 和这三格都有关系，不能填 ${I.c}。（这个技巧叫“XYZ 翼”）`, { tint, cands: cd, lines: cells.map(c => [x, c, 'ray']) });
+      }
+    } else if (I.k === 'turbot') {
+      const tint = Object.assign(T([I.a1, I.a2], 'a'), T([I.b1, I.b2], 'b'));
+      push({ text: `看数字 ${I.d}：在${name(I.g1)}里，它只能放在 ${W(I.a1)} 或 ${W(I.b1)}。`, tint: Object.assign(T(I.g1c, 'focus'), T([I.a1], 'a'), T([I.b1], 'b')), lines: [[I.a1, I.b1, 'strong']] });
+      push({ text: `在${name(I.g2)}里，它只能放在 ${W(I.a2)} 或 ${W(I.b2)}。`, tint: Object.assign(T(I.g2c, 'focus'), T([I.a2], 'a'), T([I.b2], 'b')), lines: [[I.a2, I.b2, 'strong']] });
+      push({ text: `${W(I.a1)} 和 ${W(I.a2)} ${relWord(P, I.a1, I.a2)}，不可能都是 ${I.d}。假设 ${W(I.b1)} 不是 ${I.d}，那 ${W(I.a1)} 就是 ${I.d}，于是 ${W(I.a2)} 不是，${W(I.b2)} 就是 ${I.d}。`, tint, ghost: { [I.a1]: I.d, [I.b2]: I.d }, lines: [[I.a1, I.b1, 'strong'], [I.a1, I.a2, 'weak'], [I.a2, I.b2, 'strong']] });
+      end(`所以 ${W(I.b1)} 和 ${W(I.b2)} 里至少有一个是 ${I.d}。${W(x)} 和它俩都有关系，不能放 ${I.d}。（这个技巧叫“双强链”）`, { tint: T([I.b1, I.b2], 'b'), lines: [[x, I.b1, 'ray'], [x, I.b2, 'ray']] });
+    } else if (I.k === 'w') {
+      const cd = pens(viz, [I.x, I.y]), tint = Object.assign(T([I.x, I.y], 'b'), T([I.u, I.v], 'a'));
+      push({ text: `${W(I.x)} 和 ${W(I.y)} 都只能填 ${I.A} 或 ${I.B}。`, tint, cands: cd });
+      push({ text: `在${name(I.gr)}里，数字 ${I.p} 只能放在 ${W(I.u)} 或 ${W(I.v)}。${W(I.u)} 管着 ${W(I.x)}，${W(I.v)} 管着 ${W(I.y)}，所以 ${W(I.x)} 和 ${W(I.y)} 不可能都是 ${I.p}。`, tint: Object.assign(T(I.grc, 'focus'), tint), cands: cd, lines: [[I.u, I.v, 'strong'], [I.u, I.x, 'weak'], [I.v, I.y, 'weak']] });
+      end(`那它俩里至少有一个是 ${I.q}。${W(x)} 和它俩都有关系，不能填 ${I.q}。（这个技巧叫“W 翼”）`, { tint, cands: cd, lines: [[x, I.x, 'ray'], [x, I.y, 'ray']] });
+    } else if (I.k === 'xchain' || I.k === 'xychain') {
+      const path = I.path, steps = [];
+      if (I.k === 'xchain') {
+        steps.push(`假设 ${W(path[0])} 不是 ${I.d}`);
+        for (let k = 1; k < path.length; k++) steps.push(k % 2 ? `那 ${W(path[k])} 就是 ${I.d}` : `那 ${W(path[k])} 就不是 ${I.d}`);
+      } else {
+        const pv = pens(viz, path); let out = pv[path[0]].find(z => z !== I.z0);
+        steps.push(`假设 ${W(path[0])} 不是 ${I.z0}，那它就是 ${out}`);
+        for (let k = 1; k < path.length; k++) { const nx = pv[path[k]].find(z => z !== out); steps.push(`${W(path[k])} 不能是 ${out}，就是 ${nx}`); out = nx; }
+      }
+      push({ text: `顺着标出的这串格子推：${steps.join('，')}。`, tint: Object.assign(T(path, 'c'), T([path[0], path[path.length - 1]], 'b')), cands: I.k === 'xychain' ? pens(viz, path) : {}, lines: path.slice(1).map((c, k) => [path[k], c, 'arrow']) });
+      const dd = I.k === 'xchain' ? I.d : I.z0;
+      end(`所以两头的 ${W(path[0])} 和 ${W(path[path.length - 1])} 里至少有一个是 ${dd}。${W(x)} 和两头都有关系，不能是 ${dd}。（这个技巧叫“${I.k === 'xchain' ? 'X 链' : 'XY 链'}”）`, { tint: T([path[0], path[path.length - 1]], 'b'), lines: [[x, path[0], 'ray'], [x, path[path.length - 1], 'ray']] });
+    } else end(text.replace(/<[^>]+>/g, ''), {});
+  };
+  const R = tx.reasons || [];
+  if (st.hard || st.guess) {
+    push({ text: `看 ${W(i)}：它现在可以填 ${list([...st.cand[i]])}。`, tint: T([i], 'focus'), cands: { [i]: [...st.cand[i]] } });
+    R.forEach(r => { addStrike(i, r.v); push({ text: (st.why[i].get(r.v) || {}).text || `${r.v} 推下去会出矛盾`, cands: { [i]: [...st.cand[i]] } }); });
+  } else if (st.kind === 'hidden') {
+    const gr = G[st.gk], focus = T(gr.cells, 'focus');
+    push({ text: `我们要在${name(gr.name)}里找数字 ${d} 的位置。这里还没有 ${d}，一共有 ${gr.cells.filter(c => !g[c]).length} 个空格，一格一格排除。`, tint: focus });
+    const byBlock = new Map(), rest = [];
+    R.forEach(r => {
+      const bj = r.viz && r.viz.links && r.viz.links[0] && r.viz.links[0][2] !== 'rule' && Object.entries(r.viz.roles || {}).find(([, role]) => role === 'block');
+      if (bj && !r.viz.info) { const j = +bj[0]; byBlock.set(j, [...(byBlock.get(j) || []), r]); } else rest.push(r);
+    });
+    byBlock.forEach((rs, j) => {
+      const xs = rs.map(r => r.x);
+      xs.forEach(addCross);
+      push({ text: `${W(j)} 已经有 ${d}（圈出来的）。和它${relWord(P, j, xs[0])}的格子都不能再放 ${d}，所以 ${xs.map(W).join('、')} 打叉。`, tint: focus, circle: [j], lines: xs.map(x => [j, x, 'ray']) });
+    });
+    rest.forEach(r => {
+      if (r.viz && r.viz.info) { push({ text: `${W(r.x)} 比较难排除，要多看几步：`, tint: Object.assign({}, focus, T([r.x], 'a')) }); techFrames(r.x, d, r.viz, r.text || '', true); }
+      else { addCross(r.x); push({ text: `${W(r.x)}：${(r.text || '').replace(/<[^>]+>/g, '')}，所以也打叉。`, tint: Object.assign({}, focus, r.viz ? T(Object.keys(r.viz.roles || {}).map(Number).filter(c => c !== r.x), 'c') : {}), circle: r.viz ? Object.entries(r.viz.roles || {}).filter(([, ro]) => ro === 'block').map(([c]) => +c) : [] }); }
+    });
+    push({ text: `现在${name(gr.name)}里只剩 ${W(i)} 能放 ${d}，所以这一格填 ${d}。`, tint: focus, ghost: { [i]: d } });
+  } else {
+    const all = []; for (let v = 1; v <= N; v++) all.push(v);
+    const left = () => all.filter(v => !(acc.strike[i] || []).includes(v));
+    push({ text: `看 ${W(i)} 这一格，先假设 1~${N} 都有可能，再把不行的一个个划掉。`, tint: T([i], 'focus'), cands: { [i]: all } });
+    const byGroup = new Map(), rest = [];
+    R.forEach(r => {
+      const bj = r.viz && !r.viz.info && Object.entries(r.viz.roles || {}).find(([, role]) => role === 'block');
+      if (bj) { const j = +bj[0], key = relWord(P, i, j); byGroup.set(key, [...(byGroup.get(key) || []), [j, r.v]]); } else rest.push(r);
+    });
+    byGroup.forEach((arr, key) => {
+      arr.forEach(([, v]) => addStrike(i, v));
+      push({ text: `和它${key}的格子里已经有 ${list(arr.map(a => a[1]).sort((a, b) => a - b))}（圈出来的），这些都划掉。还剩 ${list(left())}。`, tint: T([i], 'focus'), circle: arr.map(a => a[0]), lines: arr.map(a => [a[0], i, 'ray']), cands: { [i]: all } });
+    });
+    rest.forEach(r => {
+      if (r.viz && r.viz.info) { push({ text: `${r.v} 比较难排除，要多看几步：`, tint: T([i], 'focus'), cands: { [i]: all } }); techFrames(i, r.v, r.viz, r.text || '', false); }
+      else { addStrike(i, r.v); push({ text: `${(r.text || '').replace(/<[^>]+>/g, '')}，所以 ${r.v} 也划掉。还剩 ${list(left())}。`, tint: T([i], 'focus'), cands: { [i]: all } }); }
+    });
+    push({ text: `只剩 ${d} 了，所以 ${W(i)} 填 ${d}。`, tint: T([i], 'focus'), ghost: { [i]: d } });
+  }
+  return frames;
+}
 function hintValid() {
   const h = S.hint; if (!h) return false;
   const id = curId(); return h.id === id && h.key === curKey() && h.snap === board(id).g.join('') && !S.showSol;
@@ -1433,20 +1574,26 @@ function hint() {
   for (let i = 0; i < P.C; i++) if (b.g[i] && b.g[i] !== P.sol[i]) { S.hint = null; S.sel = i; refreshPuzzle(); toast(`${where(P, i)}的 ${b.g[i]} 填错了，先改这一格。`, 'warn'); return; }
   if (hintValid()) {
     const h = S.hint;
-    if (h.lvl >= 3) { S.hint = null; refreshPuzzle(); return; }   // 看完答案再按一次：关闭提示（不替你填数）
-    h.lvl++; h.rf = null; S.sel = h.cell; hideToast(); refreshPuzzle();
+    if (h.lvl >= 3) {   // 第三步里：一页一页往后翻，翻完再按就关闭（不替你填数）
+      if (h.fi < h.frames.length - 1) { h.fi++; refreshPuzzle(); } else { S.hint = null; refreshPuzzle(); }
+      return;
+    }
+    h.lvl++; h.rf = null; S.sel = h.cell; hideToast();
+    if (h.lvl === 3) { h.frames = buildFrames(P, b.g, h.st, h.tx); h.fi = 0; }
+    refreshPuzzle();
     return;
   }
   if (b.g.every(v => v)) { S.hint = null; refreshPuzzle(); toast('盘面已经填满，而且全对。', 'success'); return; }
   const st = hintStep(P, b.g);
   if (!st) { toast('现在的盘面已经无法继续，可能有格子填错了。可以点“检查已填的数”。', 'warn'); return; }
   const tx = hintTexts(P, b.g, st);
-  S.hint = { id, key, snap: b.g.join(''), lvl: 1, cell: st.cell, d: st.d, focus: tx.focus, tx };
+  S.hint = { id, key, snap: b.g.join(''), lvl: 1, cell: st.cell, d: st.d, focus: tx.focus, tx, st };
   S.sel = st.cell; hideToast(); refreshPuzzle();
 }
 function hintLabel() {
   if (!hintValid()) return '提示';
-  return ['', '下一步', '看答案', '关闭'][S.hint.lvl];
+  const h = S.hint; if (h.lvl < 3) return ['', '下一步', '看讲解'][h.lvl];
+  return h.fi < h.frames.length - 1 ? '下一页' : '关闭';
 }
 function check() {
   const id = curId(), P = prep(id), b = board(id);
@@ -1528,6 +1675,8 @@ document.addEventListener('click', e => {
   const t = e.target.closest('button, rect.hit');
   if (!t) return;
   if (t.id === 'hint-x') { S.hint = null; refreshPuzzle(); return; }
+  if (t.id === 'st-prev' && hintValid() && S.hint.fi > 0) { S.hint.fi--; refreshPuzzle(); return; }
+  if (t.id === 'st-next' && hintValid()) { hint(); return; }
   if (t.matches('rect.hit')) { S.sel = +t.dataset.i; renderBoard(); return; }
   if (t.dataset.mode) { S.mode = t.dataset.mode; S.autoPaused = false; selectPuzzle(); return; }
   if (t.dataset.set !== undefined) { S.set = +t.dataset.set; S.pidx = 0; S.autoPaused = false; selectPuzzle(); return; }
