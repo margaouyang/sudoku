@@ -1589,10 +1589,16 @@ function buildFrames(P, g, st, tx) {
     if (I.k === 'w2') { end(`${L0}${W(x)} 在绿线上的两个邻居 ${W(I.j)}、${W(I.k2)} 在同${I.un}。${W(x)} 如果填 ${v}，这两个邻居都只能填 ${list(I.u)}，必然重复，所以 ${W(x)} 不能填 ${v}。`, { tint: Object.assign(T(I.cells, 'c'), T([x], 'focus')), lines: [[x, I.j, 'ray'], [x, I.k2, 'ray']] }); return; }
     if (I.k === 'wside') {
       const sd = I.low ? '低数（1~4）' : '高数（6~9）', od = I.low ? '高数（6~9）' : '低数（1~4）', ps = I.cells.map(W).join('、'), many = I.cells.length > 1;
-      push({ text: `${L0}绿线上相邻两格至少差 5，所以线上的数一定是“低数 1~4”和“高数 6~9”交替出现（5 不能上线）。看${name(I.gname)}的 ${I.d}：${I.others.map(([lab, cs]) => `${cs.map(W).join('')} ${lab}`).join('；')}${I.others.length ? '，' : ''}只能放在绿线上的 ${ps}${many ? '，这几格沿着线数过去隔的是偶数步，高低相同' : ''}。所以${many ? '它们' : '这一格'}都是${sd}。`, tint: Object.assign(T(I.gc, 'focus'), T(I.cells, 'c')) });
-      if (I.rel === 'same' && I.cells.includes(x)) end(`${W(x)} 就在其中，是${sd}，不能填 ${v}。`, { tint: Object.assign(T(I.cells, 'c'), T([x], 'focus')) });
-      else if (I.rel === 'same') end(`${W(x)} 和${many ? '它们' : '它'}沿线隔偶数步，也是${sd}，不能填 ${v}。`, { tint: Object.assign(T(I.cells, 'c'), T([x], 'focus')) });
-      else end(`${W(x)} 和${many ? '它们' : '它'}沿线隔奇数步，是${od}，不能填 ${v}。`, { tint: Object.assign(T(I.cells, 'c'), T([x], 'focus')) });
+      const path = (a, b) => { const prev = new Map([[a, -1]]), q = [a]; while (q.length) { const u = q.shift(); if (u === b) break; P.wnb[u].forEach(w => { if (!prev.has(w)) { prev.set(w, u); q.push(w); } }); } const out = []; for (let u = b; u !== -1 && u !== undefined; u = prev.get(u)) out.unshift(u); return out; };
+      const segs = [], lines = [];
+      const walk = (a, b) => { const pt = path(a, b), n = pt.length - 1; pt.slice(1).forEach((c, k) => lines.push([pt[k], c, 'arrow']));
+        segs.push(`从 ${W(a)} 沿线走到 ${W(b)}：${pt.map(W).join('→')}，走了 ${n} 步，${n % 2 ? '奇数步，高低相反' : '偶数步，高低相同'}`); };
+      if (many) walk(I.cells[0], I.cells[I.cells.length - 1]);
+      if (!I.cells.includes(x)) walk(x, I.cells[0]);
+      push({ text: `${L0}要判断 ${W(x)} 能不能填 ${v}，先看它是低数还是高数。绿线上相邻两格至少差 5，所以线上一定是“低数 1~4”“高数 6~9”一个隔一个（5 上不了线）。${segs.join('；')}。`, tint: T([x, ...I.cells], 'c'), lines });
+      push({ text: `再看${name(I.gname)}的 ${I.d} 放哪：${I.others.map(([lab, cs]) => `${cs.map(W).join('')} ${lab}`).join('；')}${I.others.length ? '，' : ''}所以 ${I.d} 只能在 ${ps}${many ? ' 之中' : ''}。${I.d} 是${I.low ? '低' : '高'}数，${many ? `不管放哪一格，那格都是${sd}；而 ${ps} 高低相同，所以它们都是${sd}` : `所以这一格是${sd}`}。`, tint: Object.assign(T(I.gc, 'focus'), T(I.cells, 'c')) });
+      if (I.cells.includes(x)) end(`${W(x)} 是${sd}，不能填 ${v}。`, { tint: Object.assign(T(I.cells, 'c'), T([x], 'focus')) });
+      else end(`${W(x)} 和它们${I.rel === 'same' ? `高低相同，也是${sd}` : `高低相反，是${od}`}，不能填 ${v}。`, { tint: Object.assign(T(I.cells, 'c'), T([x], 'focus')) });
       return;
     }
     if (I.k === 'locked') {
