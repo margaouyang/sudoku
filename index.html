@@ -188,6 +188,7 @@
   .hint-box li { cursor: pointer; border-radius: 4px; padding: 1px 4px; margin-left: -4px; }
   .hint-box li:hover { background: var(--cell-hint); }
   .hint-box li.on { background: var(--hint-cell); }
+  .tech-name { display: block; font-weight: 700; color: var(--pen); margin: 2px 0 4px; }
   .story { display: grid; gap: 8px; margin-top: 4px; }
   .story-n { font-size: .8em; color: var(--ink-3); }
   .story-t { font-size: 1.08em; line-height: 1.8; }
@@ -654,10 +655,10 @@ function renderBoard() {
   const svg = $('board');
   svg.setAttribute('viewBox', `${-pad} ${-pad} ${W + 2 * pad} ${W + 2 * pad}`);
   const sel = S.sel, selVal = g[sel];
-  const bad = new Set();
-  if (!S.showSol) for (let i = 0; i < P.C; i++) if (b.g[i] && !P.givens[i]) { const v = b.g[i]; b.g[i] = 0; if (!cellOk(P, b.g, i, v)) bad.add(i); b.g[i] = v; }
+  // 不自动标错：只有点了“检查”之后，才把填错的格子标红，盘面一改就消失
+  const cm = S.checkMark, bad = new Set(!S.showSol && cm && cm.id === id && cm.key === curKey() && cm.snap === b.g.join('') ? cm.cells : []);
   const xy = i => [(i % N) * U, Math.floor(i / N) * U];
-  const hs = hintValid() ? S.hint : null, hintFocus = new Set(hs && hs.lvl >= 2 ? hs.focus : []);
+  const hs = hintValid() ? S.hint : null, hintFocus = new Set(hs && hs.lvl >= 2 && !hs.frames ? hs.focus : []);
   const hintCell = hs ? hs.cell : -1, isSel = i => i === sel && i !== hintCell;
   const fillOf = i => {
     if (i === hintCell) return null;
@@ -672,7 +673,7 @@ function renderBoard() {
   for (let i = 0; i < P.C; i++) {
     const [x, y] = xy(i), f = fillOf(i);
     if (f) h += `<rect x="${x}" y="${y}" width="${U}" height="${U}" fill="${f}"/>`;
-    if (i === hintCell) h += `<rect class="hint-cell${hs.lvl >= 3 ? ' done' : ''}" x="${x}" y="${y}" width="${U}" height="${U}" fill="var(--hint-cell)"/>`;
+    if (i === hintCell) h += `<rect class="hint-cell${hs.lvl >= 2 ? ' done' : ''}" x="${x}" y="${y}" width="${U}" height="${U}" fill="var(--hint-cell)"/>`;
     const shaded = P.fort.has(i) || (q.k === 'clone6' && P.cloneCells && P.cloneCells.has(i)) || (q.k === 'odd6' && P.odd.has(i));
     if (shaded) h += `<rect x="${x}" y="${y}" width="${U}" height="${U}" fill="var(--shade)" style="opacity:${isSel(i) ? 'var(--sel-shade-op)' : f ? .85 : 1}"/>`;
   }
@@ -739,7 +740,7 @@ function renderBoard() {
     }
   }
   // ---- 第三步：分步图解 ----
-  if (hs && hs.lvl >= 3 && hs.frames) {
+  if (hs && hs.lvl >= 2 && hs.frames) {
     const f = hs.frames[hs.fi] || {};
     const cc = c => { const [x, y] = xy(c); return [x + U / 2, y + U / 2]; };
     const COL = { focus: 'var(--cell-hint)', a: 'var(--viz-a)', b: 'var(--viz-b)', c: 'var(--viz-c)' };
@@ -810,15 +811,15 @@ function renderHeader() {
         const anim = hb.dataset.k.split('-').slice(0, 2).join('-') !== k.split('-').slice(0, 2).join('-');
         hb.dataset.k = k;
         let body;
-        if (h.lvl < 3) body = (h.lvl === 1 ? h.tx.L1 : h.tx.L2) + `<div class="foot">${h.lvl === 1 ? '再按 H 看用什么方法' : '再按 H 看分步讲解'}，按 Esc 关闭提示。</div>`;
+        if (h.lvl < 2) body = `<span class="tech-name">${h.tx.techLine}</span>` + h.tx.L1 + `<div class="foot">再按 H 看讲解，按 Esc 关闭提示。</div>`;
         else {
           const f = h.frames[h.fi], n = h.frames.length;
-          body = `<div class="story"><div class="story-n">第 ${h.fi + 1} / ${n} 页</div><div class="story-t">${f.text}</div>
-            <div class="story-nav"><button type="button" class="btn" id="st-prev" ${h.fi ? '' : 'disabled'}>‹ 上一页</button><span class="dots">${h.frames.map((_, q) => `<i class="${q === h.fi ? 'on' : ''}"></i>`).join('')}</span><button type="button" class="btn solid" id="st-next">${h.fi < n - 1 ? '下一页 ›' : '看完了，关闭'}</button></div></div>
+          body = `<div class="story">${n > 1 ? `<div class="story-n">第 ${h.fi + 1} / ${n} 页</div>` : ''}<div class="story-t">${f.text}</div>
+            <div class="story-nav">${n > 1 ? `<button type="button" class="btn" id="st-prev" ${h.fi ? '' : 'disabled'}>‹ 上一页</button><span class="dots">${h.frames.map((_, q) => `<i class="${q === h.fi ? 'on' : ''}"></i>`).join('')}</span>` : '<span class="dots"></span>'}<button type="button" class="btn solid" id="st-next">${h.fi < n - 1 ? '下一页 ›' : '看完了，关闭'}</button></div></div>
             <details class="story-all"><summary>看完整文字说明</summary>${h.tx.L3}</details>
             <div class="foot">按 H 翻下一页，按 Esc 关闭。答案要你自己填，填好后按 H 看下一个提示。</div>`;
         }
-        hb.innerHTML = `<button type="button" class="hint-x" id="hint-x" aria-label="关闭提示" title="关闭提示（Esc）">×</button><span class="hint-tag">提示 ${h.lvl}/3</span>` + body;
+        hb.innerHTML = `<button type="button" class="hint-x" id="hint-x" aria-label="关闭提示" title="关闭提示（Esc）">×</button><span class="hint-tag">提示 ${h.lvl}/2</span>` + body;
         hb.hidden = false;
         if (anim) { hb.style.animation = 'none'; void hb.offsetWidth; hb.style.animation = ''; }
       }
@@ -1418,14 +1419,13 @@ function hintTexts(P, g, st) {
   const reasons = [];
   const reason = (x, v) => {
     const b = whyNotFull(P, g, x, v);
-    let r = b ? { text: b.text, viz: b.viz } : null;
-    if (!r) { const w = st.why[x].get(v); if (w) { used.add(w.tech); r = { text: w.text, viz: w.viz }; } }
-    if (!r) r = { text: '结合前面的推理可以排除', viz: null };
-    reasons.push({ x, v, viz: r.viz, text: r.text });
+    let r = b ? { text: b.text, viz: b.viz, tech: b.viz && Object.values(b.viz.roles || {}).includes('cage') ? '虚线框' : b.viz && b.viz.links && b.viz.links[0] && b.viz.links[0][2] === 'rule' ? '提示' : b.viz && Object.values(b.viz.roles || {}).includes('rule') ? '奇偶' : '' } : null;
+    if (!r) { const w = st.why[x].get(v); if (w) { used.add(w.tech); r = { text: w.text, viz: w.viz, tech: w.tech }; } }
+    if (!r) r = { text: '结合前面的推理可以排除', viz: null, tech: '' };
+    reasons.push({ x, v, viz: r.viz, text: r.text, tech: r.tech });
     return `<span class="rs" data-r="${reasons.length - 1}">${r.text}</span>`;
   };
-  const L1 = st.kind === 'hidden' ? `看盘面上<b>橙色闪烁</b>的那一格。它现在可以唯一确定，先想想看。`
-    : `看盘面上<b>橙色闪烁</b>的那一格。这里现在只有一个数字能填，是突破口。`;
+  const L1 = `看盘面上<b>橙色闪烁</b>的那一格，它现在可以确定，先自己想想。`;
   let L2, L3, focus = [i];
   // 先生成第三步，统计真正用到的技巧，再写第二步
   const preOf = () => {
@@ -1451,9 +1451,13 @@ function hintTexts(P, g, st) {
     L2 = `${preOf()}用<b>唯一余数法</b>：把这一格所在的行、列、宫${P.cages.length || P.pc[i].length || P.odd.size || P.even.size ? '以及本题的特殊规则' : ''}都检查一遍，1~${P.N} 里只剩一个数字没被排除。`;
     L3 = `<b>答案是 ${d}</b>。其它数字都被排除了：<ul>${ex.join('')}</ul>`;
   }
-  return { L1, L2, L3, focus, reasons };
+  const base = st.guess || st.hard ? '假设法' : st.kind === 'hidden' ? ({ box: '宫摒除', row: '行摒除', col: '列摒除' }[G[st.gk].t] || '区域摒除') : '唯一余数';
+  const adv = [...used].filter(t => CAND_TECHS.has(t)), dir = [...used].filter(t => !CAND_TECHS.has(t) && t !== base);
+  const techLine = adv.length ? `技巧：${adv.join('、')}（要写候选数）${dir.length ? ' + ' + dir.join('、') : ''} + ${base}` : `技巧：${[...dir, base].join(' + ')}${dir.length ? '' : '（直观法）'}`;
+  return { L1, L2, L3, focus, reasons, techLine };
 }
 /* ---------- 第三步：分步图解（给初学者看的“连环画”） ---------- */
+function TECH_SHORT(t, v) { return ({ '乘积提示': '乘积配不上', '加法提示': '和配不上', '连续线': '连续线条件不符', '连续线（没有线的地方不能相差 1）': '没有连续线，不能相差 1', '不等号': '不等号不符', '克隆格': '克隆格不符', '堡垒大小关系': '堡垒大小不符', '区块摒除': `被区块挡住`, '数对占位': '被数对占住' })[t] || ''; }
 function relWord(P, a, b) {
   const G = groupInfo(P);
   const gr = G.find(x => x.cells.includes(a) && x.cells.includes(b));
@@ -1545,13 +1549,17 @@ function buildFrames(P, g, st, tx) {
     const blocks = new Map(), others = [];
     simple.forEach(r => { const b = blockOf(r); if (b) { const j = +b[0]; blocks.set(j, [...(blocks.get(j) || []), r.x]); } else others.push(r); });
     simple.forEach(r => addCross(r.x));
-    let t = `在${name(gr.name)}里找 ${d}。`;
-    if (blocks.size) t += `圈出来的格子已经有 ${d}，被它们挡住的 ${[...blocks.values()].flat().length} 格打叉。`;
-    others.forEach(r => { t += `<br>${W(r.x)}：${plain(r.text)}，也打叉。`; });
+    const SHORT = v => ({ '虚线框': `放 ${v} 后虚线框的和对不上`, '杀手框的数字组合': `所在虚线框的组合里没有 ${v}`, '区域求和': `按区域总和推算，用不到 ${v}`, '提示': `和旁边的提示配不上`, '奇偶': `奇偶不符`, '提示数占位': `${v} 已被提示占住` });
+    const shortOf = (r, v) => SHORT(v)[r.tech] || TECH_SHORT(r.tech, v) || plain(r.text);
+    const parts = [];
+    if (blocks.size) parts.push(`被圈出来的 ${d} 挡住了 ${[...blocks.values()].flat().length} 格`);
+    const byS = new Map(); others.forEach(r => { const k = shortOf(r, d); byS.set(k, [...(byS.get(k) || []), r.x]); });
+    byS.forEach((xs, k) => parts.push(`${xs.map(W).join('')} ${k}`));
+    let t = `${name(gr.name)}里：${parts.join('；')}`;
     const extra = { tint: focus, circle: [...blocks.keys()], lines: [...blocks.entries()].flatMap(([j, xs]) => xs.map(x => [j, x, 'ray'])) };
-    if (!hard.length) { push(Object.assign({ text: t + `<br>只剩 ${W(i)} 能放 ${d}。` }, extra, { ghost: { [i]: d } })); }
+    if (!hard.length) { push(Object.assign({ text: t + `，只剩 ${W(i)} 能放 ${d}。` }, extra, { ghost: { [i]: d } })); }
     else {
-      if (simple.length) push(Object.assign({ text: t + `<br>还剩 ${hard.map(r => W(r.x)).join('、')} 需要多想一步。` }, extra));
+      if (simple.length) push(Object.assign({ text: t + `，还剩 ${hard.map(r => W(r.x)).join('、')} 要多想一步。` }, extra));
       hard.forEach((r, k) => techFrames(r.x, d, r.viz, r.text, true, simple.length || k ? `为什么 ${W(r.x)} 不能放 ${d}？` : `在${name(gr.name)}里找 ${d}。先看 ${W(r.x)}：`));
       finish(`于是${name(gr.name)}里只剩 ${W(i)} 能放 ${d}。`, { ghost: { [i]: d } });
     }
@@ -1559,13 +1567,15 @@ function buildFrames(P, g, st, tx) {
     const all = []; for (let v = 1; v <= N; v++) all.push(v);
     const simple = R.filter(r => !(r.viz && r.viz.info)), hard = R.filter(r => r.viz && r.viz.info);
     const circ = [], lines = []; let rules = '';
-    simple.forEach(r => { addStrike(i, r.v); const b = blockOf(r); if (b) { circ.push(+b[0]); lines.push([+b[0], i, 'ray']); } else rules += `<br>${plain(r.text)}，划掉 ${r.v}。`; });
+    const byT = new Map();
+    simple.forEach(r => { addStrike(i, r.v); const b = blockOf(r); if (b) { circ.push(+b[0]); lines.push([+b[0], i, 'ray']); } else byT.set(r.tech || plain(r.text), [...(byT.get(r.tech || plain(r.text)) || []), r.v]); });
+    byT.forEach((vs, k) => { rules += `；${list(vs)} ${({ '虚线框': '会让虚线框的和对不上', '杀手框的数字组合': '不在虚线框的组合里', '区域求和': '按区域总和推算用不上', '提示': '和旁边的提示配不上', '奇偶': '奇偶不符', '提示数占位': '已被提示占住' })[k] || k}`; });
     const left = all.filter(v => !(acc.strike[i] || []).includes(v));
-    let t = `看 ${W(i)}：和它同行、同列、同宫的圈出数字都不能填，划掉。` + rules;
+    let t = (circ.length ? `${W(i)} 同行、同列、同宫里已有圈出的这些数` : `${W(i)}：`) + rules.replace(/^；/, circ.length ? '；' : '');
     const extra = { tint: T([i], 'focus'), circle: circ, lines, cands: { [i]: all } };
-    if (!hard.length) push(Object.assign({ text: t + `<br>只剩 ${d}。` }, extra, { ghost: {} }));
+    if (!hard.length) push(Object.assign({ text: t + `，只剩 ${d} 能填。` }, extra, { ghost: {} }));
     else {
-      push(Object.assign({ text: t + `<br>还剩 ${list(left)}。` }, extra));
+      push(Object.assign({ text: t + `，还剩 ${list(left)}。` }, extra));
       hard.forEach(r => techFrames(i, r.v, r.viz, r.text, false, `为什么不能是 ${r.v}？`));
       finish(`所以 ${W(i)} 只能填 ${d}。`, { ghost: {} });
     }
@@ -1592,12 +1602,12 @@ function hint() {
   for (let i = 0; i < P.C; i++) if (b.g[i] && b.g[i] !== P.sol[i]) { S.hint = null; S.sel = i; refreshPuzzle(); toast(`${where(P, i)}的 ${b.g[i]} 填错了，先改这一格。`, 'warn'); return; }
   if (hintValid()) {
     const h = S.hint;
-    if (h.lvl >= 3) {   // 第三步里：一页一页往后翻，翻完再按就关闭（不替你填数）
+    if (h.lvl >= 2) {   // 第二步：一页一页往后翻，翻完再按就关闭（不替你填数）
       if (h.fi < h.frames.length - 1) { h.fi++; refreshPuzzle(); } else { S.hint = null; refreshPuzzle(); }
       return;
     }
     h.lvl++; h.rf = null; S.sel = h.cell; hideToast();
-    if (h.lvl === 3) { h.frames = buildFrames(P, b.g, h.st, h.tx); h.fi = 0; }
+    if (h.lvl === 2) { h.frames = buildFrames(P, b.g, h.st, h.tx); h.fi = 0; }
     refreshPuzzle();
     return;
   }
@@ -1610,14 +1620,16 @@ function hint() {
 }
 function hintLabel() {
   if (!hintValid()) return '提示';
-  const h = S.hint; if (h.lvl < 3) return ['', '下一步', '看讲解'][h.lvl];
+  const h = S.hint; if (h.lvl < 2) return '看讲解';
   return h.fi < h.frames.length - 1 ? '下一页' : '关闭';
 }
 function check() {
   const id = curId(), P = prep(id), b = board(id);
   const wrong = [], blanks = b.g.filter(v => !v).length;
-  b.g.forEach((v, i) => { if (v && v !== P.sol[i]) wrong.push(where(P, i)); });
-  if (wrong.length) toast(`有 ${wrong.length} 格填错：${wrong.slice(0, 4).join('、')}${wrong.length > 4 ? '等' : ''}。`, 'warn');
+  const cells = [];
+  b.g.forEach((v, i) => { if (v && v !== P.sol[i]) { wrong.push(where(P, i)); cells.push(i); } });
+  S.checkMark = { id, key: curKey(), snap: b.g.join(''), cells }; renderBoard();
+  if (wrong.length) toast(`有 ${wrong.length} 格填错，已在盘面上标红。改动任何一格后红色会消失。`, 'warn');
   else if (!blanks) toast('全部填满，而且全对。', 'success');
   else toast(`已填的数字都对，还剩 ${blanks} 格。`);
 }
