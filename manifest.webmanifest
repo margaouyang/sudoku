@@ -1,0 +1,14 @@
+{
+  "name": "北京数独 51–64 岁组模拟卷",
+  "short_name": "数独练习",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#EFEADB",
+  "theme_color": "#EFEADB",
+  "lang": "zh-CN",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
