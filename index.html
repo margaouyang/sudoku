@@ -41,6 +41,7 @@
     --cell-hint: #FDF0CF;
     --hint: #D98A00;
     --hint-cell: #F5B53C;
+    --tag-bg: #C2410C;
     --viz-a: #F4C7A1; --viz-b: #BFDDB0; --viz-c: #C9DAF0; --viz-line: #D2553F; --viz-strong: #1F4E9C;
     --hint-bg: #FFF4D9;
     --grid-thin: #9FBF9F;
@@ -190,6 +191,7 @@
   .story-n { font-size: .8em; color: var(--ink-3); }
   .story-t { font-size: 1.08em; line-height: 1.8; }
   .story-t b { color: var(--pen); }
+  .ctag { display: inline-flex; align-items: center; justify-content: center; width: 1.45em; height: 1.45em; margin: 0 2px; border-radius: 50%; background: var(--tag-bg); color: #fff; font-family: var(--num); font-weight: 700; font-size: .9em; vertical-align: .05em; }
   .story-nav { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .story-nav .btn { padding: 5px 14px; }
   .story-nav .btn[disabled] { opacity: .35; cursor: default; }
@@ -754,7 +756,7 @@ function renderBoard() {
         L += `<rect x="${x + 3}" y="${y + 3}" width="${U - 6}" height="${U - 6}" rx="8" fill="var(--board-bg)" opacity=".8"/>`;
         if (f.tint && f.tint[c] && f.tint[c] !== 'focus') L += `<rect x="${x + 4}" y="${y + 4}" width="${U - 8}" height="${U - 8}" rx="10" fill="${COL[f.tint[c]]}" opacity=".85"/>`;
         ds.forEach((v, k) => {
-          const px = x + U * ((k % per) + .5) / per, py = y + U / 2 + (Math.floor(k / per) - (rowsN - 1) / 2) * fs * 1.05;
+          const px = x + U * ((k % per) + .5) / per, py = y + U / 2 + 8 + (Math.floor(k / per) - (rowsN - 1) / 2) * fs * 1.05;
           const off = strike.has(v);
           L += `<text x="${px}" y="${py + fs * .35}" font-size="${fs}" font-weight="700" text-anchor="middle" fill="${off ? 'var(--ink-3)' : 'var(--viz-strong)'}" opacity="${off ? .45 : 1}" font-family="var(--num)">${v}</text>`;
           if (off) L += `<line x1="${px - fs * .4}" y1="${py + fs * .35}" x2="${px + fs * .4}" y2="${py - fs * .35}" stroke="var(--red)" stroke-width="3.5" stroke-linecap="round"/>`;
@@ -765,6 +767,7 @@ function renderBoard() {
     Object.entries(f.ghost || {}).forEach(([c, v]) => { c = +c; if (g[c]) return; const [x, y] = xy(c), [cx, cy] = cc(c);
       const tc = f.tint && f.tint[c] && f.tint[c] !== 'focus' ? COL[f.tint[c]] : null;
       L += `<rect x="${x + 3}" y="${y + 3}" width="${U - 6}" height="${U - 6}" rx="8" fill="var(--board-bg)" opacity=".85"/>` + (tc ? `<rect x="${x + 4}" y="${y + 4}" width="${U - 8}" height="${U - 8}" rx="10" fill="${tc}" opacity=".85"/>` : '') + `<text x="${cx}" y="${cy + big * .36 + dy}" font-size="${big}" text-anchor="middle" fill="var(--viz-strong)" opacity=".7" font-family="var(--num)">${v}</text>`; });
+    Object.entries(f.tags || {}).forEach(([c, t]) => { const [x, y] = xy(+c); L += `<circle cx="${x + U - 15}" cy="${y + 15}" r="13" fill="var(--tag-bg)"/><text x="${x + U - 15}" y="${y + 21.5}" font-size="18" font-weight="700" text-anchor="middle" fill="#fff" font-family="var(--num)">${t}</text>`; });
     h += `<defs><marker id="vizArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--viz-strong)"/></marker></defs>` + L;
   }
   for (let i = 0; i < P.C; i++) { const [x, y] = xy(i); h += `<rect class="hit" data-i="${i}" x="${x}" y="${y}" width="${U}" height="${U}"/>`; }
@@ -1414,8 +1417,8 @@ function hintTexts(P, g, st) {
     reasons.push({ x, v, viz: r.viz, text: r.text });
     return `<span class="rs" data-r="${reasons.length - 1}">${r.text}</span>`;
   };
-  const L1 = st.kind === 'hidden' ? `看${W}这一格（盘面上橙色闪烁的格子）。它现在可以唯一确定，先想想看。`
-    : `看${W}这一格（盘面上橙色闪烁的格子）。这里现在只有一个数字能填，是突破口。`;
+  const L1 = st.kind === 'hidden' ? `看盘面上<b>橙色闪烁</b>的那一格。它现在可以唯一确定，先想想看。`
+    : `看盘面上<b>橙色闪烁</b>的那一格。这里现在只有一个数字能填，是突破口。`;
   let L2, L3, focus = [i];
   // 先生成第三步，统计真正用到的技巧，再写第二步
   const preOf = () => {
@@ -1434,7 +1437,7 @@ function hintTexts(P, g, st) {
     const gr = G[st.gk]; focus = gr.cells;
     const others = gr.cells.filter(x => x !== i && !g[x]);
     L3 = `<b>答案是 ${d}</b>。${gr.name}里一定要有一个 ${d}，而其它空格都不能放 ${d}：<ul>` + others.map(x => `<li>${where(P, x)}：${reason(x, d)}</li>`).join('') + `</ul>所以 ${d} 只能放在${W}。`;
-    L2 = `${preOf()}用<b>排除法</b>：看${gr.name}（已标出）。这个区域里还缺几个数字，其中有一个数字在这个区域里只剩${W}能放。`;
+    L2 = `${preOf()}用<b>排除法</b>：看${gr.name}（已标出）。这个区域里还缺几个数字，其中有一个数字只剩闪烁的那一格能放。`;
   } else {
     focus = [...new Set([i, ...P.peers[i]])];
     const ex = []; for (let v = 1; v <= P.N; v++) if (v !== d) ex.push(`<li>不能是 ${v}：${reason(i, v)}</li>`);
@@ -1454,114 +1457,119 @@ function relWord(P, a, b) {
   return '互相影响';
 }
 function buildFrames(P, g, st, tx) {
-  const W = c => `<b>${where(P, c)}</b>`, i = st.cell, d = st.d, N = P.N, G = groupInfo(P);
+  const W = c => `⟦${c}⟧`, i = st.cell, d = st.d, N = P.N, G = groupInfo(P);
   const frames = [], acc = { cross: new Set(), strike: {} };
-  const push = f => {
+  let lastIsEnd = false;
+  const push = (f, isEnd = false) => {
     f.cross = [...new Set([...(f.cross || []), ...acc.cross])];
     f.strike = Object.assign({}, acc.strike, f.strike || {});
-    frames.push(f);
+    frames.push(f); lastIsEnd = isEnd;
   };
   const addCross = x => acc.cross.add(x);
   const addStrike = (x, v) => { acc.strike[x] = [...new Set([...(acc.strike[x] || []), v])]; };
   const pens = (viz, cells) => Object.fromEntries(cells.filter(c => !g[c]).map(c => [c, (viz && viz.pens && viz.pens[c]) || candidates(P, g, c)]));
   const T = (cells, color) => Object.fromEntries(cells.map(c => [c, color]));
-  const name = (s) => `<b>${s}</b>`;
-  // 一条“为什么 x 不能是 v”的复杂理由，拆成几步
-  const techFrames = (x, v, viz, text, isCell) => {
+  const name = s => `<b>${s}</b>`;
+  const plain = t => (t || '').replace(/<[^>]+>/g, '');
+  // 复杂理由：拆成尽量少的几页；lead 是第一页开头的引导语
+  const techFrames = (x, v, viz, text, isCell, lead) => {
     const I = viz && viz.info;
-    const end = (t, extra = {}) => { if (isCell) addCross(x); else addStrike(x, v); push(Object.assign({ text: t }, extra)); };
-    if (!I) { end(text.replace(/<[^>]+>/g, ''), { tint: viz ? T(Object.keys(viz.roles || {}).map(Number), 'c') : {} }); return; }
+    const end = (t, extra = {}) => { if (isCell) addCross(x); else addStrike(x, v); push(Object.assign({ text: t }, extra), true); };
+    const L0 = lead ? lead + '' : '';
+    if (!I) { end(L0 + plain(text) + '。', { tint: viz ? T(Object.keys(viz.roles || {}).map(Number), 'c') : {} }); return; }
     if (I.k === 'locked') {
-      push({ text: `先看${name(I.from)}：数字 ${I.d} 在这里只能放在标蓝的这几格，而它们都在${name(I.to)}里。`, tint: Object.assign(T(I.fromCells, 'focus'), T(I.pos, 'c')) });
-      end(`所以${name(I.to)}的 ${I.d} 一定在这几格中的某一格，${I.to}里其它格都不能再放 ${I.d}，${W(x)} 也不行。`, { tint: Object.assign(T(I.toCells, 'focus'), T(I.pos, 'c')) });
+      end(`${L0}看${name(I.from)}：${I.d} 只能放在标蓝的几格里，它们都在${name(I.to)}上。所以${I.to}的 ${I.d} 一定在这几格之一，${W(x)} 不能放 ${I.d}。`, { tint: Object.assign(T(I.toCells, 'focus'), T(I.fromCells, 'focus'), T(I.pos, 'c')) });
     } else if (I.k === 'hsub') {
-      push({ text: `看${name(I.gr)}：数字 ${list(I.digits)} 在这里都只能放进标蓝的这 ${I.cells.length} 格。`, tint: Object.assign(T(I.grCells, 'focus'), T(I.cells, 'c')) });
-      end(`${I.cells.length} 个数正好占满这 ${I.cells.length} 格，这几格就没有位置留给别的数了，所以 ${W(x)} 不能填 ${v}。`, { tint: T(I.cells, 'c'), cands: pens(viz, I.cells) });
+      end(`${L0}看${name(I.gr)}：${list(I.digits)} 这 ${I.digits.length} 个数都只能放进标蓝的这 ${I.cells.length} 格，正好占满，所以 ${W(x)} 不能填 ${v}。`, { tint: Object.assign(T(I.grCells, 'focus'), T(I.cells, 'c')), cands: pens(viz, I.cells) });
     } else if (I.k === 'nsub') {
-      push({ text: `看${name(I.gr)}里标蓝的这 ${I.cells.length} 格：它们能填的数合起来只有 ${list(I.digits)} 这 ${I.digits.length} 个。`, tint: Object.assign(T(I.grCells, 'focus'), T(I.cells, 'c')), cands: pens(viz, I.cells) });
-      end(`这 ${I.digits.length} 个数一定被这几格用掉，${I.gr}里别的格子就不能再填它们，所以 ${W(x)} 不能填 ${v}。`, { tint: T(I.cells, 'c'), cands: pens(viz, I.cells) });
+      end(`${L0}看${name(I.gr)}里标蓝的 ${I.cells.length} 格：能填的数合起来只有 ${list(I.digits)}，一定被它们用掉，所以 ${W(x)} 不能填 ${v}。`, { tint: Object.assign(T(I.grCells, 'focus'), T(I.cells, 'c')), cands: pens(viz, I.cells) });
     } else if (I.k === 'fish') {
-      I.lines.forEach(L => push({ text: `看${name(L.name)}：数字 ${I.d} 只能放在标蓝的 ${L.ps.length} 格。`, tint: Object.assign(T(L.cells, 'focus'), T(L.ps, 'c')) }));
       const covers = I.cover.map(c => c.name).join('和');
-      push({ text: `这 ${I.lines.length} ${I.bn}的 ${I.d} 全都落在${name(covers)}上，而且每一${I.cn}最多只能有一个 ${I.d}。所以${covers}的 ${I.d}，一定被这几${I.bn}用掉了。`, tint: Object.assign(T(I.cover.flatMap(c => c.cells), 'focus'), T(I.lines.flatMap(L => L.ps), 'c')) });
-      end(`${W(x)} 也在${covers}上，但不在这几${I.bn}里，所以它不能放 ${I.d}。（这个技巧叫“${I.name}”）`, { tint: T(I.lines.flatMap(L => L.ps), 'c') });
-    } else if (I.k === 'xy' || I.k === 'xyz') {
+      push({ text: `${L0}看数字 ${I.d}：在${I.lines.map(L => name(L.name)).join('、')}里，它都只能放在标蓝的格子，而这些格子全在${name(covers)}上。`, tint: Object.assign(T(I.lines.flatMap(L => L.cells), 'focus'), T(I.lines.flatMap(L => L.ps), 'c')) });
+      end(`每${I.cn}只能有一个 ${I.d}，所以${covers}的 ${I.d} 都被这几${I.bn}用掉了。${W(x)} 在${covers}上又不在这几${I.bn}里，不能放 ${I.d}。（这叫“${I.name}”）`, { tint: Object.assign(T(I.cover.flatMap(c => c.cells), 'focus'), T(I.lines.flatMap(L => L.ps), 'c')) });
+    } else if (I.k === 'xy') {
       const cells = [I.p, I.x, I.y], cd = pens(viz, cells), tint = Object.assign(T([I.p], 'a'), T([I.x, I.y], 'b'));
-      push({ text: `先看这三格能填什么：${W(I.p)} 只能填 ${list(I.pv)}；${W(I.x)} 只能填 ${list(I.cx)}；${W(I.y)} 只能填 ${list(I.cy)}。`, tint, cands: cd });
-      if (I.k === 'xy') {
-        I.cases.forEach(([a, w]) => push({ text: `假设 ${W(I.p)} 填 ${a}：${W(w)} 和它${relWord(P, I.p, w)}，不能再填 ${a}，只能填 ${I.c}。`, tint, cands: cd, ghost: { [I.p]: a, [w]: I.c }, lines: [[I.p, w, 'arrow']] }));
-        end(`两种情况里，${W(I.x)} 和 ${W(I.y)} 总有一格是 ${I.c}。${W(x)} 和 ${W(I.x)} ${relWord(P, x, I.x)}，和 ${W(I.y)} ${relWord(P, x, I.y)}，所以它不能填 ${I.c}。（这个技巧叫“XY 翼”）`, { tint: Object.assign({}, tint, T([I.x, I.y], 'b')), cands: cd, lines: [[x, I.x, 'ray'], [x, I.y, 'ray']] });
-      } else {
-        push({ text: `${W(I.p)} 填 ${I.c} 时，它自己就是 ${I.c}；填别的数时，像上面那样推，${W(I.x)} 或 ${W(I.y)} 会变成 ${I.c}。`, tint, cands: cd });
-        end(`所以这三格里总有一格是 ${I.c}。${W(x)} 和这三格都有关系，不能填 ${I.c}。（这个技巧叫“XYZ 翼”）`, { tint, cands: cd, lines: cells.map(c => [x, c, 'ray']) });
-      }
+      const [c1, c2] = I.cases;
+      push({ text: `${L0}看这三格：${W(I.p)} 只能填 ${list(I.pv)}，${W(I.x)} 只能填 ${list(I.cx)}，${W(I.y)} 只能填 ${list(I.cy)}。<br>假设 ${W(I.p)} 填 ${c1[0]}，那 ${W(c1[1])} 只能填 ${I.c}。`, tint, cands: cd, ghost: { [I.p]: c1[0], [c1[1]]: I.c }, lines: [[I.p, c1[1], 'arrow']] });
+      push({ text: `如果 ${W(I.p)} 填 ${c2[0]}，那 ${W(c2[1])} 只能填 ${I.c}。`, tint, cands: cd, ghost: { [I.p]: c2[0], [c2[1]]: I.c }, lines: [[I.p, c2[1], 'arrow']] });
+      end(`两种情况都有一格是 ${I.c}，而 ${W(x)} 和这两格都在同一行、列或宫，所以它不能是 ${I.c}。（这叫“XY 翼”）`, { tint: T([I.x, I.y], 'b'), cands: pens(viz, [I.x, I.y]), lines: [[x, I.x, 'ray'], [x, I.y, 'ray']] });
+    } else if (I.k === 'xyz') {
+      const cells = [I.p, I.x, I.y], cd = pens(viz, cells), tint = Object.assign(T([I.p], 'a'), T([I.x, I.y], 'b'));
+      end(`${L0}看这三格：${W(I.p)} 只能填 ${list(I.pv)}，${W(I.x)} 只能填 ${list(I.cx)}，${W(I.y)} 只能填 ${list(I.cy)}。不管 ${W(I.p)} 填哪个，三格里总有一格是 ${I.c}，而 ${W(x)} 和三格都有关系，所以不能是 ${I.c}。（这叫“XYZ 翼”）`, { tint, cands: cd, lines: cells.map(c => [x, c, 'ray']) });
     } else if (I.k === 'turbot') {
       const tint = Object.assign(T([I.a1, I.a2], 'a'), T([I.b1, I.b2], 'b'));
-      push({ text: `看数字 ${I.d}：在${name(I.g1)}里，它只能放在 ${W(I.a1)} 或 ${W(I.b1)}。`, tint: Object.assign(T(I.g1c, 'focus'), T([I.a1], 'a'), T([I.b1], 'b')), lines: [[I.a1, I.b1, 'strong']] });
-      push({ text: `在${name(I.g2)}里，它只能放在 ${W(I.a2)} 或 ${W(I.b2)}。`, tint: Object.assign(T(I.g2c, 'focus'), T([I.a2], 'a'), T([I.b2], 'b')), lines: [[I.a2, I.b2, 'strong']] });
-      push({ text: `${W(I.a1)} 和 ${W(I.a2)} ${relWord(P, I.a1, I.a2)}，不可能都是 ${I.d}。假设 ${W(I.b1)} 不是 ${I.d}，那 ${W(I.a1)} 就是 ${I.d}，于是 ${W(I.a2)} 不是，${W(I.b2)} 就是 ${I.d}。`, tint, ghost: { [I.a1]: I.d, [I.b2]: I.d }, lines: [[I.a1, I.b1, 'strong'], [I.a1, I.a2, 'weak'], [I.a2, I.b2, 'strong']] });
-      end(`所以 ${W(I.b1)} 和 ${W(I.b2)} 里至少有一个是 ${I.d}。${W(x)} 和它俩都有关系，不能放 ${I.d}。（这个技巧叫“双强链”）`, { tint: T([I.b1, I.b2], 'b'), lines: [[x, I.b1, 'ray'], [x, I.b2, 'ray']] });
+      push({ text: `${L0}看数字 ${I.d}：在${name(I.g1)}里只能放在 ${W(I.a1)} 或 ${W(I.b1)}；在${name(I.g2)}里只能放在 ${W(I.a2)} 或 ${W(I.b2)}。`, tint: Object.assign(T(I.g1c, 'focus'), T(I.g2c, 'focus'), tint), lines: [[I.a1, I.b1, 'strong'], [I.a2, I.b2, 'strong']] });
+      end(`${W(I.a1)} 和 ${W(I.a2)} 不能都是 ${I.d}，所以 ${W(I.b1)}、${W(I.b2)} 至少有一个是 ${I.d}。${W(x)} 和它俩都有关系，不能放 ${I.d}。（这叫“双强链”）`, { tint, ghost: {}, lines: [[I.a1, I.a2, 'weak'], [x, I.b1, 'ray'], [x, I.b2, 'ray']] });
     } else if (I.k === 'w') {
       const cd = pens(viz, [I.x, I.y]), tint = Object.assign(T([I.x, I.y], 'b'), T([I.u, I.v], 'a'));
-      push({ text: `${W(I.x)} 和 ${W(I.y)} 都只能填 ${I.A} 或 ${I.B}。`, tint, cands: cd });
-      push({ text: `在${name(I.gr)}里，数字 ${I.p} 只能放在 ${W(I.u)} 或 ${W(I.v)}。${W(I.u)} 管着 ${W(I.x)}，${W(I.v)} 管着 ${W(I.y)}，所以 ${W(I.x)} 和 ${W(I.y)} 不可能都是 ${I.p}。`, tint: Object.assign(T(I.grc, 'focus'), tint), cands: cd, lines: [[I.u, I.v, 'strong'], [I.u, I.x, 'weak'], [I.v, I.y, 'weak']] });
-      end(`那它俩里至少有一个是 ${I.q}。${W(x)} 和它俩都有关系，不能填 ${I.q}。（这个技巧叫“W 翼”）`, { tint, cands: cd, lines: [[x, I.x, 'ray'], [x, I.y, 'ray']] });
+      push({ text: `${L0}${W(I.x)} 和 ${W(I.y)} 都只能填 ${I.A} 或 ${I.B}。而在${name(I.gr)}里，${I.p} 只能放在 ${W(I.u)} 或 ${W(I.v)}，它们分别管着这两格，所以这两格不可能都是 ${I.p}。`, tint: Object.assign(T(I.grc, 'focus'), tint), cands: cd, lines: [[I.u, I.v, 'strong'], [I.u, I.x, 'weak'], [I.v, I.y, 'weak']] });
+      end(`那它俩至少有一个是 ${I.q}，${W(x)} 和它俩都有关系，不能填 ${I.q}。（这叫“W 翼”）`, { tint, cands: cd, lines: [[x, I.x, 'ray'], [x, I.y, 'ray']] });
     } else if (I.k === 'xchain' || I.k === 'xychain') {
       const path = I.path, steps = [];
       if (I.k === 'xchain') {
         steps.push(`假设 ${W(path[0])} 不是 ${I.d}`);
-        for (let k = 1; k < path.length; k++) steps.push(k % 2 ? `那 ${W(path[k])} 就是 ${I.d}` : `那 ${W(path[k])} 就不是 ${I.d}`);
+        for (let k = 1; k < path.length; k++) steps.push(k % 2 ? `${W(path[k])} 就是 ${I.d}` : `${W(path[k])} 就不是`);
       } else {
         const pv = pens(viz, path); let out = pv[path[0]].find(z => z !== I.z0);
-        steps.push(`假设 ${W(path[0])} 不是 ${I.z0}，那它就是 ${out}`);
-        for (let k = 1; k < path.length; k++) { const nx = pv[path[k]].find(z => z !== out); steps.push(`${W(path[k])} 不能是 ${out}，就是 ${nx}`); out = nx; }
+        steps.push(`假设 ${W(path[0])} 不是 ${I.z0}（那它是 ${out}）`);
+        for (let k = 1; k < path.length; k++) { const nx = pv[path[k]].find(z => z !== out); steps.push(`${W(path[k])} 是 ${nx}`); out = nx; }
       }
-      push({ text: `顺着标出的这串格子推：${steps.join('，')}。`, tint: Object.assign(T(path, 'c'), T([path[0], path[path.length - 1]], 'b')), cands: I.k === 'xychain' ? pens(viz, path) : {}, lines: path.slice(1).map((c, k) => [path[k], c, 'arrow']) });
       const dd = I.k === 'xchain' ? I.d : I.z0;
-      end(`所以两头的 ${W(path[0])} 和 ${W(path[path.length - 1])} 里至少有一个是 ${dd}。${W(x)} 和两头都有关系，不能是 ${dd}。（这个技巧叫“${I.k === 'xchain' ? 'X 链' : 'XY 链'}”）`, { tint: T([path[0], path[path.length - 1]], 'b'), lines: [[x, path[0], 'ray'], [x, path[path.length - 1], 'ray']] });
-    } else end(text.replace(/<[^>]+>/g, ''), {});
+      push({ text: `${L0}顺着标出的格子推：${steps.join(' → ')}。所以两头至少有一个是 ${dd}。`, tint: Object.assign(T(path, 'c'), T([path[0], path[path.length - 1]], 'b')), cands: I.k === 'xychain' ? pens(viz, path) : {}, lines: path.slice(1).map((c, k) => [path[k], c, 'arrow']) });
+      end(`${W(x)} 和两头都有关系，不能是 ${dd}。（这叫“${I.k === 'xchain' ? 'X 链' : 'XY 链'}”）`, { tint: T([path[0], path[path.length - 1]], 'b'), lines: [[x, path[0], 'ray'], [x, path[path.length - 1], 'ray']] });
+    } else end(L0 + plain(text) + '。', {});
+  };
+  const finish = (text, extra) => {
+    if (lastIsEnd && frames.length) { const f = frames[frames.length - 1]; f.text += `<br>${text}`; f.ghost = Object.assign({}, f.ghost || {}, extra.ghost); f.cross = [...new Set([...(f.cross || []), ...acc.cross])]; }
+    else push(Object.assign({ text }, extra));
   };
   const R = tx.reasons || [];
+  const blockOf = r => r.viz && !r.viz.info && r.viz.links && r.viz.links[0] && r.viz.links[0][2] !== 'rule' && Object.entries(r.viz.roles || {}).find(([, role]) => role === 'block');
   if (st.hard || st.guess) {
-    push({ text: `看 ${W(i)}：它现在可以填 ${list([...st.cand[i]])}。`, tint: T([i], 'focus'), cands: { [i]: [...st.cand[i]] } });
-    R.forEach(r => { addStrike(i, r.v); push({ text: (st.why[i].get(r.v) || {}).text || `${r.v} 推下去会出矛盾`, cands: { [i]: [...st.cand[i]] } }); });
+    push({ text: `看 ${W(i)}：它现在可以填 ${list([...st.cand[i]])}。` + R.map(r => `<br>${plain((st.why[i].get(r.v) || {}).text) || `${r.v} 推下去会出矛盾`}。`).join(''), tint: T([i], 'focus'), cands: { [i]: [...st.cand[i]] } });
+    R.forEach(r => addStrike(i, r.v));
+    finish(`所以这一格填 ${d}。`, { ghost: { [i]: d } });
   } else if (st.kind === 'hidden') {
     const gr = G[st.gk], focus = T(gr.cells, 'focus');
-    push({ text: `我们要在${name(gr.name)}里找数字 ${d} 的位置。这里还没有 ${d}，一共有 ${gr.cells.filter(c => !g[c]).length} 个空格，一格一格排除。`, tint: focus });
-    const byBlock = new Map(), rest = [];
-    R.forEach(r => {
-      const bj = r.viz && r.viz.links && r.viz.links[0] && r.viz.links[0][2] !== 'rule' && Object.entries(r.viz.roles || {}).find(([, role]) => role === 'block');
-      if (bj && !r.viz.info) { const j = +bj[0]; byBlock.set(j, [...(byBlock.get(j) || []), r]); } else rest.push(r);
-    });
-    byBlock.forEach((rs, j) => {
-      const xs = rs.map(r => r.x);
-      xs.forEach(addCross);
-      push({ text: `${W(j)} 已经有 ${d}（圈出来的）。和它${relWord(P, j, xs[0])}的格子都不能再放 ${d}，所以 ${xs.map(W).join('、')} 打叉。`, tint: focus, circle: [j], lines: xs.map(x => [j, x, 'ray']) });
-    });
-    rest.forEach(r => {
-      if (r.viz && r.viz.info) { push({ text: `${W(r.x)} 比较难排除，要多看几步：`, tint: Object.assign({}, focus, T([r.x], 'a')) }); techFrames(r.x, d, r.viz, r.text || '', true); }
-      else { addCross(r.x); push({ text: `${W(r.x)}：${(r.text || '').replace(/<[^>]+>/g, '')}，所以也打叉。`, tint: Object.assign({}, focus, r.viz ? T(Object.keys(r.viz.roles || {}).map(Number).filter(c => c !== r.x), 'c') : {}), circle: r.viz ? Object.entries(r.viz.roles || {}).filter(([, ro]) => ro === 'block').map(([c]) => +c) : [] }); }
-    });
-    push({ text: `现在${name(gr.name)}里只剩 ${W(i)} 能放 ${d}，所以这一格填 ${d}。`, tint: focus, ghost: { [i]: d } });
+    const simple = R.filter(r => !(r.viz && r.viz.info)), hard = R.filter(r => r.viz && r.viz.info);
+    const blocks = new Map(), others = [];
+    simple.forEach(r => { const b = blockOf(r); if (b) { const j = +b[0]; blocks.set(j, [...(blocks.get(j) || []), r.x]); } else others.push(r); });
+    simple.forEach(r => addCross(r.x));
+    let t = `在${name(gr.name)}里找 ${d}。`;
+    if (blocks.size) t += `圈出来的格子已经有 ${d}，被它们挡住的 ${[...blocks.values()].flat().length} 格打叉。`;
+    others.forEach(r => { t += `<br>${W(r.x)}：${plain(r.text)}，也打叉。`; });
+    const extra = { tint: focus, circle: [...blocks.keys()], lines: [...blocks.entries()].flatMap(([j, xs]) => xs.map(x => [j, x, 'ray'])) };
+    if (!hard.length) { push(Object.assign({ text: t + `<br>只剩 ${W(i)} 能放 ${d}。` }, extra, { ghost: { [i]: d } })); }
+    else {
+      if (simple.length) push(Object.assign({ text: t + `<br>还剩 ${hard.map(r => W(r.x)).join('、')} 需要多想一步。` }, extra));
+      hard.forEach((r, k) => techFrames(r.x, d, r.viz, r.text, true, simple.length || k ? `为什么 ${W(r.x)} 不能放 ${d}？` : `在${name(gr.name)}里找 ${d}。先看 ${W(r.x)}：`));
+      finish(`于是${name(gr.name)}里只剩 ${W(i)} 能放 ${d}。`, { ghost: { [i]: d } });
+    }
   } else {
     const all = []; for (let v = 1; v <= N; v++) all.push(v);
-    const left = () => all.filter(v => !(acc.strike[i] || []).includes(v));
-    push({ text: `看 ${W(i)} 这一格，先假设 1~${N} 都有可能，再把不行的一个个划掉。`, tint: T([i], 'focus'), cands: { [i]: all } });
-    const byGroup = new Map(), rest = [];
-    R.forEach(r => {
-      const bj = r.viz && !r.viz.info && Object.entries(r.viz.roles || {}).find(([, role]) => role === 'block');
-      if (bj) { const j = +bj[0], key = relWord(P, i, j); byGroup.set(key, [...(byGroup.get(key) || []), [j, r.v]]); } else rest.push(r);
-    });
-    byGroup.forEach((arr, key) => {
-      arr.forEach(([, v]) => addStrike(i, v));
-      push({ text: `和它${key}的格子里已经有 ${list(arr.map(a => a[1]).sort((a, b) => a - b))}（圈出来的），这些都划掉。还剩 ${list(left())}。`, tint: T([i], 'focus'), circle: arr.map(a => a[0]), lines: arr.map(a => [a[0], i, 'ray']), cands: { [i]: all } });
-    });
-    rest.forEach(r => {
-      if (r.viz && r.viz.info) { push({ text: `${r.v} 比较难排除，要多看几步：`, tint: T([i], 'focus'), cands: { [i]: all } }); techFrames(i, r.v, r.viz, r.text || '', false); }
-      else { addStrike(i, r.v); push({ text: `${(r.text || '').replace(/<[^>]+>/g, '')}，所以 ${r.v} 也划掉。还剩 ${list(left())}。`, tint: T([i], 'focus'), cands: { [i]: all } }); }
-    });
-    push({ text: `只剩 ${d} 了，所以 ${W(i)} 填 ${d}。`, tint: T([i], 'focus'), ghost: { [i]: d } });
+    const simple = R.filter(r => !(r.viz && r.viz.info)), hard = R.filter(r => r.viz && r.viz.info);
+    const circ = [], lines = []; let rules = '';
+    simple.forEach(r => { addStrike(i, r.v); const b = blockOf(r); if (b) { circ.push(+b[0]); lines.push([+b[0], i, 'ray']); } else rules += `<br>${plain(r.text)}，划掉 ${r.v}。`; });
+    const left = all.filter(v => !(acc.strike[i] || []).includes(v));
+    let t = `看 ${W(i)}：和它同行、同列、同宫的圈出数字都不能填，划掉。` + rules;
+    const extra = { tint: T([i], 'focus'), circle: circ, lines, cands: { [i]: all } };
+    if (!hard.length) push(Object.assign({ text: t + `<br>只剩 ${d}。` }, extra, { ghost: {} }));
+    else {
+      push(Object.assign({ text: t + `<br>还剩 ${list(left)}。` }, extra));
+      hard.forEach(r => techFrames(i, r.v, r.viz, r.text, false, `为什么不能是 ${r.v}？`));
+      finish(`所以 ${W(i)} 只能填 ${d}。`, { ghost: {} });
+    }
   }
+  // 把提到的格子换成字母标签（A、B、C…），整套讲解里同一格始终用同一个字母
+  const tagOf = new Map(), ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  frames.forEach(f => {
+    f.tags = {};
+    f.text = f.text.replace(/⟦(\d+)⟧/g, (_, c) => {
+      c = +c; if (!tagOf.has(c)) tagOf.set(c, ABC[tagOf.size % ABC.length]);
+      f.tags[c] = tagOf.get(c);
+      return `<span class="ctag">${tagOf.get(c)}</span>格`;
+    });
+  });
   return frames;
 }
 function hintValid() {
